@@ -21,7 +21,6 @@ import numpy as np
 import sys
 import torch
 import torch.nn as nn
-from dropout import Dropout
 
 def rand_matrix(N, M):
 	return np.random.uniform(-100, 100, (N, M)).astype(np.float32)
@@ -37,24 +36,22 @@ def emit(name, array, alignment='NR_LANES*32'):
 			s += "%02x" % bs[i+3-n]
 		print("    .word 0x%s" % s)
 
-row = 128
-col = 512
-p = 0.1
+def relu(mat):
+    act = nn.ReLU()
+    return act(torch.from_numpy(mat)).numpy().astype(np.float32)
+
+row = 64
+col = 256
 
 # Generate inputs
-mat = torch.randn((row, col))* 3.14
-# prob = torch.ones(row, col) * (1-p)
-# sel = torch.bernoulli(prob)
+mat = rand_matrix(row, col)
+o = np.zeros((row, col)).astype(np.float32)
+o_gold = relu(mat)
 
-kernel = Dropout()
-(o_gold, sel, scale) = kernel(mat, p)
-
+# Print information on file
 print(".section .data,\"aw\",@progbits")
 emit("row", np.array(row, dtype=np.int32))
 emit("col", np.array(col, dtype=np.int32))
-emit("scale", np.array(scale, dtype=np.float32))
-
-emit("mat", mat.numpy().astype(np.float32), 'NR_LANES*32')
-emit("sel", sel.numpy().astype(np.int32), 'NR_LANES*32')
-
-emit("o_gold", o_gold.numpy().astype(np.float32), 'NR_LANES*32')
+emit("mat", mat, 'NR_LANES*32')
+emit("o", o, 'NR_LANES*32')
+emit("o_gold", o_gold, 'NR_LANES*32')

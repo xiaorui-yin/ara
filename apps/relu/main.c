@@ -17,7 +17,7 @@
 #include <stdio.h>
 #include <riscv_vector.h>
 
-#include "kernel/dropout.h"
+#include "kernel/relu.h"
 #include "common/common.h"
 
 #ifndef SPIKE
@@ -27,15 +27,16 @@
 #include "runtime.h"
 
 extern int col, row; // row & column size
-extern float scale;
 extern float mat[] __attribute__((aligned(32 * NR_LANES))); // matrix data (N x M) to normalize
-extern int sel[] __attribute__((aligned(32 * NR_LANES))); // matrix data (N x M) to normalize
+// extern const float alpha[][] __attribute__((aligned(4 * NR_LANES))); // shift parameter
+// extern const float beta[][] __attribute__((aligned(4 * NR_LANES))); // bias parameter
+extern float o[] __attribute__((aligned(32 * NR_LANES)));
 extern float o_gold[] __attribute__((aligned(32 * NR_LANES)));
 
 int main() {
   printf("\n");
   printf("=============\n");
-  printf("=  Dropout  =\n");
+  printf("=  RELU     =\n");
   printf("=============\n");
   printf("\n");
   printf("\n");
@@ -47,7 +48,7 @@ int main() {
 
 #ifndef SPIKE
   start_timer();
-  dropout(mat, sel, scale, row, col);
+  relu(mat, row, col);
   stop_timer();
   
   // Performance metrics
@@ -59,7 +60,7 @@ int main() {
   //printf("The performance is %f SPFLOP/cycle (%f%% utilization).\n",
   //       performance, utilization);
 #else
-  dropout(mat, sel, scale, row, col);
+  relu(mat, row, col);
 #endif
 
   printf("Verifying result\n");

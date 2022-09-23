@@ -20,11 +20,6 @@
 import numpy as np
 import sys
 import torch
-import torch.nn as nn
-from dropout import Dropout
-
-def rand_matrix(N, M):
-	return np.random.uniform(-100, 100, (N, M)).astype(np.float32)
 
 def emit(name, array, alignment='NR_LANES*32'):
 	print(".global %s" % name)
@@ -37,24 +32,53 @@ def emit(name, array, alignment='NR_LANES*32'):
 			s += "%02x" % bs[i+3-n]
 		print("    .word 0x%s" % s)
 
-row = 128
-col = 512
-p = 0.1
+def softmax(mat):
+    row = mat.size()[-2]
+    col = mat.size()[-1]
+    
+    o = torch.Tensor(row, col)
+
+    cur_sum = torch.zeros(row)
+    cur_max = torch.ones(row) * -999999
+    for i in range(col):
+        data = mat[:, i]
+        next_max = torch.max(cur_max, data)
+        data = data - next_max
+        data = torch.exp(data)
+        # data = torch.ones(row) * 5
+
+        tmp_ = cur_max - next_max
+        tmp_ = torch.exp(tmp_)
+
+        next_sum = cur_sum * tmp_
+        next_sum = next_sum + data
+        # next_sum = data
+
+        cur_sum = next_sum
+        cur_max = next_max
+    for i in range(col):
+        data = mat[:, i]
+        tmp = data - cur_max
+        tmp = torch.exp(tmp)
+
+        tmp = tmp / cur_sum
+        o[:, i] = tmp
+        # o[:, i] = cur_sum
+    return o
+
+
+row = 16
+col = 16
 
 # Generate inputs
-mat = torch.randn((row, col))* 3.14
-# prob = torch.ones(row, col) * (1-p)
-# sel = torch.bernoulli(prob)
+mat = torch.rand((row, col))
 
-kernel = Dropout()
-(o_gold, sel, scale) = kernel(mat, p)
+# kernel = torch.nn.Softmax(dim=1)
+# o_gold = kernel(mat)
+o_gold = softmax(mat)
 
 print(".section .data,\"aw\",@progbits")
 emit("row", np.array(row, dtype=np.int32))
 emit("col", np.array(col, dtype=np.int32))
-emit("scale", np.array(scale, dtype=np.float32))
-
 emit("mat", mat.numpy().astype(np.float32), 'NR_LANES*32')
-emit("sel", sel.numpy().astype(np.int32), 'NR_LANES*32')
-
 emit("o_gold", o_gold.numpy().astype(np.float32), 'NR_LANES*32')

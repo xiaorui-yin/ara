@@ -20,11 +20,8 @@
 import numpy as np
 import sys
 import torch
-import torch.nn as nn
-from dropout import Dropout
 
-def rand_matrix(N, M):
-	return np.random.uniform(-100, 100, (N, M)).astype(np.float32)
+torch.set_default_dtype(torch.float32)
 
 def emit(name, array, alignment='NR_LANES*32'):
 	print(".global %s" % name)
@@ -37,24 +34,26 @@ def emit(name, array, alignment='NR_LANES*32'):
 			s += "%02x" % bs[i+3-n]
 		print("    .word 0x%s" % s)
 
-row = 128
-col = 512
-p = 0.1
+dim1 = 64
+dim2 = 64
+dim3 = 64
 
 # Generate inputs
-mat = torch.randn((row, col))* 3.14
-# prob = torch.ones(row, col) * (1-p)
-# sel = torch.bernoulli(prob)
+mat_a = torch.rand((dim1, dim2))
+mat_b = torch.rand((dim2, dim3))
+o = torch.rand((dim1, dim3))
 
-kernel = Dropout()
-(o_gold, sel, scale) = kernel(mat, p)
+o_gold = torch.matmul(mat_a, mat_b)
+o_t = torch.transpose(o_gold, 0, 1)
 
 print(".section .data,\"aw\",@progbits")
-emit("row", np.array(row, dtype=np.int32))
-emit("col", np.array(col, dtype=np.int32))
-emit("scale", np.array(scale, dtype=np.float32))
+emit("dim1", np.array(dim1, dtype=np.int32))
+emit("dim2", np.array(dim2, dtype=np.int32))
+emit("dim3", np.array(dim3, dtype=np.int32))
 
-emit("mat", mat.numpy().astype(np.float32), 'NR_LANES*32')
-emit("sel", sel.numpy().astype(np.int32), 'NR_LANES*32')
-
+emit("mat_a", mat_a.numpy().astype(np.float32), 'NR_LANES*32')
+emit("mat_b", mat_b.numpy().astype(np.float32), 'NR_LANES*32')
 emit("o_gold", o_gold.numpy().astype(np.float32), 'NR_LANES*32')
+emit("o", o.numpy().astype(np.float32), 'NR_LANES*32')
+emit("o_t", o_t.numpy().astype(np.float32), 'NR_LANES*32')
+

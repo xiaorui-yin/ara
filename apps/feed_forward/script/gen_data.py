@@ -20,11 +20,9 @@
 import numpy as np
 import sys
 import torch
-import torch.nn as nn
-from dropout import Dropout
+import math
 
-def rand_matrix(N, M):
-	return np.random.uniform(-100, 100, (N, M)).astype(np.float32)
+from feed_forward import FeedForward
 
 def emit(name, array, alignment='NR_LANES*32'):
 	print(".global %s" % name)
@@ -37,24 +35,42 @@ def emit(name, array, alignment='NR_LANES*32'):
 			s += "%02x" % bs[i+3-n]
 		print("    .word 0x%s" % s)
 
-row = 128
-col = 512
-p = 0.1
+d_model = 768
+n = 64
+d_ff = 4 * d_model
 
 # Generate inputs
-mat = torch.randn((row, col))* 3.14
-# prob = torch.ones(row, col) * (1-p)
-# sel = torch.bernoulli(prob)
+x = torch.randn((n, d_model)) * 3.14
+w1 = torch.randn((d_model, d_ff)) * 3.14
+w2 = torch.randn((d_ff, d_model)) * 3.14
 
-kernel = Dropout()
-(o_gold, sel, scale) = kernel(mat, p)
+bias_1 = torch.randn(d_ff) * 3.14 
+bias_2 = torch.randn(d_model) * 3.14
+
+alpha = 10 * torch.randn(d_model)
+beta = 10 * torch.randn(d_model)
+
+o = 10 * torch.randn((n, d_model))
+# o = 10 * torch.randn((n, d_ff))
+
+kernel = FeedForward(w1, bias_1, w2, bias_2, alpha, beta)
+(o_gold, sel, scale) = kernel(x)
 
 print(".section .data,\"aw\",@progbits")
-emit("row", np.array(row, dtype=np.int32))
-emit("col", np.array(col, dtype=np.int32))
+emit("n", np.array(n, dtype=np.int32))
+emit("d_model", np.array(d_model, dtype=np.int32))
 emit("scale", np.array(scale, dtype=np.float32))
 
-emit("mat", mat.numpy().astype(np.float32), 'NR_LANES*32')
+emit("x", x.numpy().astype(np.float32), 'NR_LANES*32')
+emit("w1", w1.numpy().astype(np.float32), 'NR_LANES*32')
+emit("w2", w2.numpy().astype(np.float32), 'NR_LANES*32')
+emit("bias_1", bias_1.numpy().astype(np.float32), 'NR_LANES*32')
+emit("bias_2", bias_2.numpy().astype(np.float32), 'NR_LANES*32')
+
+emit("alpha", alpha.numpy().astype(np.float32), 'NR_LANES*32')
+emit("beta", beta.numpy().astype(np.float32), 'NR_LANES*32')
+
 emit("sel", sel.numpy().astype(np.int32), 'NR_LANES*32')
 
 emit("o_gold", o_gold.numpy().astype(np.float32), 'NR_LANES*32')
+emit("o", o.numpy().astype(np.float32), 'NR_LANES*32')

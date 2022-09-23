@@ -20,11 +20,7 @@
 import numpy as np
 import sys
 import torch
-import torch.nn as nn
-from dropout import Dropout
-
-def rand_matrix(N, M):
-	return np.random.uniform(-100, 100, (N, M)).astype(np.float32)
+from layernorm import LayerNorm
 
 def emit(name, array, alignment='NR_LANES*32'):
 	print(".global %s" % name)
@@ -37,24 +33,35 @@ def emit(name, array, alignment='NR_LANES*32'):
 			s += "%02x" % bs[i+3-n]
 		print("    .word 0x%s" % s)
 
-row = 128
-col = 512
-p = 0.1
+row = 64
+col = 768
 
 # Generate inputs
-mat = torch.randn((row, col))* 3.14
-# prob = torch.ones(row, col) * (1-p)
-# sel = torch.bernoulli(prob)
+mat   = 3.14 * torch.randn((row, col))
 
-kernel = Dropout()
-(o_gold, sel, scale) = kernel(mat, p)
+alpha = 3.14 * torch.randn(col)
+# beta  = 3.14 * torch.randn(col)
+beta  = 314 * torch.ones(col)
+
+# mat   = torch.FloatTensor(row, col)
+
+# alpha = torch.FloatTensor(row, col)
+# beta  = torch.FloatTensor(row, col)
+
+# mean = mat.mean(-1, keepdim=True)
+# std = 1 / torch.sqrt(mat.var(-1, keepdim=True) + 0.00001) 
+
+
+kernel = LayerNorm(alpha, beta)
+o_gold = kernel(mat)
 
 print(".section .data,\"aw\",@progbits")
 emit("row", np.array(row, dtype=np.int32))
 emit("col", np.array(col, dtype=np.int32))
-emit("scale", np.array(scale, dtype=np.float32))
-
 emit("mat", mat.numpy().astype(np.float32), 'NR_LANES*32')
-emit("sel", sel.numpy().astype(np.int32), 'NR_LANES*32')
-
+emit("alpha", alpha.numpy().astype(np.float32), 'NR_LANES*32')
+emit("beta", beta.numpy().astype(np.float32), 'NR_LANES*32')
 emit("o_gold", o_gold.numpy().astype(np.float32), 'NR_LANES*32')
+
+# emit("std", std.numpy().astype(np.float32), 'NR_LANES*32')
+# emit("mean", mean.numpy().astype(np.float32), 'NR_LANES*32')

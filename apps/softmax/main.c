@@ -14,10 +14,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <stdio.h>
 #include <riscv_vector.h>
-
-#include "kernel/dropout.h"
+#include <stdio.h>
+#include "kernel/softmax.h"
 #include "common/common.h"
 
 #ifndef SPIKE
@@ -26,17 +25,15 @@
 
 #include "runtime.h"
 
-extern int col, row; // row & column size
-extern float scale;
+extern const int row, col; // row & column size
 extern float mat[] __attribute__((aligned(32 * NR_LANES))); // matrix data (N x M) to normalize
-extern int sel[] __attribute__((aligned(32 * NR_LANES))); // matrix data (N x M) to normalize
 extern float o_gold[] __attribute__((aligned(32 * NR_LANES)));
 
 int main() {
   printf("\n");
-  printf("=============\n");
-  printf("=  Dropout  =\n");
-  printf("=============\n");
+  printf("========================\n");
+  printf("=        Softmax       =\n");
+  printf("========================\n");
   printf("\n");
   printf("\n");
 
@@ -47,21 +44,20 @@ int main() {
 
 #ifndef SPIKE
   start_timer();
-  dropout(mat, sel, scale, row, col);
+  softmax(mat, row, col);
   stop_timer();
   
   // Performance metrics
   int64_t runtime = get_timer();
-   //float performance = 2.0 * CH * F * F * M * N / runtime;
-   //float utilization = 100 * performance / (2.0 * NR_LANES);
+  float performance = (row * col * (3*20 + 7)) / (float)runtime; // exp takes 20 FOPs
+  float utilization = 100 * performance / (2.0 * NR_LANES);
 
   printf("The execution took %d cycles.\n", runtime);
-  //printf("The performance is %f SPFLOP/cycle (%f%% utilization).\n",
-  //       performance, utilization);
+  printf("The performance is %f SPFLOP/cycle (%f%% utilization).\n",
+        performance, utilization);
 #else
-  dropout(mat, sel, scale, row, col);
+  softmax(mat, row, col);
 #endif
-
   printf("Verifying result\n");
   compare_matrix(mat, o_gold, row, col);
 }
