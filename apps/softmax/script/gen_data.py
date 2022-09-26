@@ -67,8 +67,8 @@ def softmax(mat):
     return o
 
 
-row = 16
-col = 16
+row = 64
+col = 64
 
 # Generate inputs
 mat = torch.rand((row, col))

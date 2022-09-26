@@ -3,3 +3,4 @@ common/link.ld
 .__pycache__/
 *.c.o
 *.c.o.spike
+data.*
