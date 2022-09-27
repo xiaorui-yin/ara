@@ -166,15 +166,17 @@ module sldu import ara_pkg::*; import rvv_pkg::*; #(
   logic [idx_width(NrLanes)-1:0] red_stride_cnt_d, red_stride_cnt_q;
   logic [idx_width(NrLanes):0] red_stride_cnt_d_wide;
 
-  logic is_issue_reduction;
+  logic is_issue_reduction, is_issue_alu_reduction, is_issue_vmfpu_reduction;
 
-  assign is_issue_reduction = vinsn_issue_valid_q & (vinsn_issue_q.vfu inside {VFU_Alu, VFU_MFpu});
+  assign is_issue_alu_reduction   = vinsn_issue_valid_q & (vinsn_issue_q.vfu == VFU_Alu);
+  assign is_issue_vmfpu_reduction = vinsn_issue_valid_q & (vinsn_issue_q.vfu == VFU_MFpu);
+  assign is_issue_reduction       = is_issue_alu_reduction | is_issue_vmfpu_reduction;
 
   always_comb begin
     sldu_mux_sel_o = NO_RED;
-    if ((is_issue_reduction && !(vinsn_commit_valid && vinsn_commit.vfu != VFU_Alu)) || (vinsn_commit_valid && vinsn_commit.vfu == VFU_Alu)) begin
+    if ((is_issue_alu_reduction && !(vinsn_commit_valid && vinsn_commit.vfu != VFU_Alu)) || (vinsn_commit_valid && vinsn_commit.vfu == VFU_Alu)) begin
       sldu_mux_sel_o = ALU_RED;
-    end else if ((vinsn_issue_valid_q && vinsn_issue_q.vfu == VFU_MFpu && !(vinsn_commit_valid && vinsn_commit.vfu != VFU_MFpu)) || (vinsn_commit_valid && vinsn_commit.vfu == VFU_MFpu)) begin
+    end else if ((is_issue_vmfpu_reduction && !(vinsn_commit_valid && vinsn_commit.vfu != VFU_MFpu)) || (vinsn_commit_valid && vinsn_commit.vfu == VFU_MFpu)) begin
       sldu_mux_sel_o = MFPU_RED;
     end
   end
@@ -312,7 +314,8 @@ module sldu import ara_pkg::*; import rvv_pkg::*; #(
       SLIDE_RUN, SLIDE_RUN_VSLIDE1UP_FIRST_WORD: begin
         // Are we ready?
         // During a reduction (vinsn_issue_q.vfu == VFU_Alu/VFU_MFPU) don't wait for mask bits
-        if (&sldu_operand_valid_i && (sldu_operand_target_fu_i[0] == SLDU || is_issue_reduction) && !result_queue_full && (vinsn_issue_q.vm || vinsn_issue_q.vfu inside {VFU_Alu, VFU_MFpu} || (|mask_valid_i)))
+        if ((&sldu_operand_valid_i || (((vinsn_issue_q.stride >> vinsn_issue_q.vtype.vsew) >= vinsn_issue_q.vl) && (state_q == SLIDE_RUN_VSLIDE1UP_FIRST_WORD))) &&
+          (sldu_operand_target_fu_i[0] == SLDU || is_issue_reduction) && !result_queue_full && (vinsn_issue_q.vm || vinsn_issue_q.vfu inside {VFU_Alu, VFU_MFpu} || (|mask_valid_i)))
         begin
           // How many bytes are we copying from the operand to the destination, in this cycle?
           automatic int in_byte_count = NrLanes * 8 - in_pnt_q;
@@ -601,7 +604,8 @@ module sldu import ara_pkg::*; import rvv_pkg::*; #(
                      ? pe_req_i.vl << int'(pe_req_i.vtype.vsew)
                      : (NrLanes * ($clog2(NrLanes) + 1)) << EW64;
         // Trim vector elements which are not written by the slide unit
-        if (pe_req_i.op == VSLIDEUP)
+        // VSLIDE1UP always writes at least 1 element
+        if (pe_req_i.op == VSLIDEUP && !pe_req_i.use_scalar_op)
           issue_cnt_d -= vinsn_queue_d.vinsn[vinsn_queue_q.accept_pnt].stride;
       end
       if (vinsn_queue_d.commit_cnt == '0) begin
@@ -609,8 +613,10 @@ module sldu import ara_pkg::*; import rvv_pkg::*; #(
                      ? pe_req_i.vl << int'(pe_req_i.vtype.vsew)
                      : (NrLanes * ($clog2(NrLanes) + 1)) << EW64;
         // Trim vector elements which are not written by the slide unit
-        if (pe_req_i.op == VSLIDEUP)
+        // VSLIDE1UP always writes at least 1 element
+        if (pe_req_i.op == VSLIDEUP && !pe_req_i.use_scalar_op) begin
           commit_cnt_d -= vinsn_queue_d.vinsn[vinsn_queue_q.accept_pnt].stride;
+        end
       end
 
       // Bump pointers and counters of the vector instruction queue
