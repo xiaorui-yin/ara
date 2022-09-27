@@ -1,6 +1,7 @@
 bin
 common/link.ld
-.__pycache__/
+__pycache__/
 *.c.o
-*.c.o.spike
-data.*
+data.S
+*.spike
+spike_runs/
