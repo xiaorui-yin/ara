@@ -15,7 +15,7 @@
 // limitations under the License.
 
 #include "riscv_vector.h"
-#include "utils.h"
+#include "fmatmul.h"
 #include "layernorm.h"
 #include "relu.h"
 #include "dropout.h"
@@ -26,16 +26,14 @@ void feed_forward(float *x, float *o, float *w1, float *bias_1, float *w2, float
   const int d_ff = d_model * 4;
 
   float o1[n * d_ff] __attribute__((aligned(32 * NR_LANES)));
-  float o2[n * d_model] __attribute__((aligned(32 * NR_LANES)));
   
-
   // =================================================
   // First Linear Transformation
   // =================================================
 
   // o1 = x * w1 + bias_1
   // n x d_ff = n x d_model * d_model x d_ff + n x d_ff
-  matmul_biased(x, w1, o1, bias_1, n, d_model, d_ff, 0);
+  fmatmul_bias(o1, x, w1, bias_1, n, d_model, d_ff);
 
   // =================================================
   // Activation and Dropout
@@ -45,18 +43,11 @@ void feed_forward(float *x, float *o, float *w1, float *bias_1, float *w2, float
   dropout(o1, sel, scale, n, d_ff);
 
   // =================================================
-  // Second Linear Transformation
+  // Second Linear Transformation and Residual Connection
   // =================================================
 
-  // o2 = o1 * w2 + bias_2
-  // n x d_model = n x d_ff * d_ff x d_model + n x d_model
-  matmul_biased(o1, w2, o2, bias_2, n, d_ff, d_model, 0);
-
-  // =================================================
-  // Residual Connection
-  // =================================================
-
-  matadd(o2, x, o, n, d_model);
+  // o = o1 * w2 + bias_2 + x
+  fmatmul_add(o, o1, w2, bias_2, x, n, d_ff, d_model);
 
   // =================================================
   // Layer Normalization

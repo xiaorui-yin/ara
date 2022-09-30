@@ -17,7 +17,7 @@
 
 //void layernorm(float **mat, float **alpha, float **beta, int row, int col);
 
-void relu(float **mat, int row, int col);
+void relu(float *mat, int row, int col);
 
 // input:
 // x: input token embedding or output of previous sublayer (n x d_model)

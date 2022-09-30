@@ -49,8 +49,9 @@ int main() {
   
   // Performance metrics
   int64_t runtime = get_timer();
-  float performance = (row * col * (3*20 + 7)) / (float)runtime; // exp takes 20 FOPs
-  float utilization = 100 * performance / (2.0 * NR_LANES);
+  float performance = (row * col * (3*28 + 7)) / (float)runtime;
+  float performance_1 = (row * col * (3*21 + 7)) / (float)runtime;
+  float utilization = 100.0 * performance_1 / (2.0 * NR_LANES);
 
   printf("The execution took %d cycles.\n", runtime);
   printf("The performance is %f SPFLOP/cycle (%f%% utilization).\n",

@@ -50,8 +50,8 @@ q_bias = torch.randn((h, dk)) * 3.14
 k_bias = torch.randn((h, dk)) * 3.14
 v_bias = torch.randn((h, dk)) * 3.14
 
-alpha = torch.randn((n, d_model)) * 3.14
-beta = torch.randn((n, d_model)) * 3.14
+alpha = torch.randn(d_model) * 3.14
+beta = torch.randn(d_model) * 3.14
 
 wo = torch.randn(d_model, d_model) * 3.14
 o_bias = torch.randn(d_model) * 3.14
@@ -62,6 +62,9 @@ kernel = MultiHeadAttention(wq, q_bias, wk, k_bias, wv, v_bias,
         wo, o_bias, alpha, beta)
 o_gold = kernel(x, n, d_model, h)
 
+scale = math.sqrt(dk)
+wq /= scale
+q_bias /= scale
 
 print(".section .data,\"aw\",@progbits")
 emit("n", np.array(n, dtype=np.int32))

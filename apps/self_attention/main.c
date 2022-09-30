@@ -51,19 +51,22 @@ int main() {
 
 #ifndef SPIKE
   start_timer();
-  self_attention(x, o, wq, q_bias, wk, k_bias, wv, v_bias, n, d_model, dk, 0);
+  self_attention(x, o, wq, q_bias, wk, k_bias, wv, v_bias, n, d_model, dk);
   stop_timer();
   
   // Performance metrics
   int64_t runtime = get_timer();
-  float performance = (3*2*n*d_model*dk + 2*2*n*n*dk + 10*n*n) / (float)runtime;
-  float utilization = 100 * performance / (2.0 * NR_LANES);
+  float softmax_ops = n * n * (3*28 + 7);
+  float softmax_ops_ = n * n * (3*21 + 7);
+  float performance = (6 * n * d_model * dk + 3 * n * dk + 4 * n * n * dk + softmax_ops) / (float)runtime;
+  float performance_ = (3 * n * d_model * dk + 3 * n * dk + 2 * n * n * dk + softmax_ops_) / (float)runtime;
+  float utilization = 100.0 * performance_ / (2.0 * NR_LANES);
 
   printf("The execution took %d cycles.\n", runtime);
   printf("The performance is %f SPFLOP/cycle (%f%% utilization).\n",
         performance, utilization);
 #else
-  self_attention(x, o, wq, q_bias, wk, k_bias, wv, v_bias, n, d_model, dk, 0);
+  self_attention(x, o, wq, q_bias, wk, k_bias, wv, v_bias, n, d_model, dk);
 #endif
 
   printf("Verifying result\n");

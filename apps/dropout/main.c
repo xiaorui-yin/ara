@@ -52,12 +52,12 @@ int main() {
   
   // Performance metrics
   int64_t runtime = get_timer();
-   //float performance = 2.0 * CH * F * F * M * N / runtime;
-   //float utilization = 100 * performance / (2.0 * NR_LANES);
+  float performance = 1.0 * row * col / runtime;
+  float utilization = 100.0 * performance / (2.0 * NR_LANES);
 
   printf("The execution took %d cycles.\n", runtime);
-  //printf("The performance is %f SPFLOP/cycle (%f%% utilization).\n",
-  //       performance, utilization);
+  printf("The performance is %f SPFLOP/cycle (%f%% utilization).\n",
+        performance, utilization);
 #else
   dropout(mat, sel, scale, row, col);
 #endif

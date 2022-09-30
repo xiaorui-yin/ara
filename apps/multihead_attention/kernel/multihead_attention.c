@@ -15,7 +15,7 @@
 // limitations under the License.
 
 #include "riscv_vector.h"
-#include "utils.h"
+#include "fmatmul.h"
 #include "layernorm.h"
 #include "self_attention.h"
 
@@ -26,7 +26,6 @@ void multihead_attention(float *x, float *multihead_attn, float *wq, float *q_bi
   const int dk = d_model / h;
 
   float mhsa_1[n * d_model] __attribute__((aligned(32 * NR_LANES)));
-  float mhsa_2[n * d_model] __attribute__((aligned(32 * NR_LANES)));
 
   // =================================================
   // Calculate self-attention for each head
@@ -34,43 +33,19 @@ void multihead_attention(float *x, float *multihead_attn, float *wq, float *q_bi
 
   for (int i = 0; i < h; i++) {
     // self_attention(x, (mhsa_1 + n * dk * i),
-    self_attention(x, mhsa_1,
+    // mhsa_1 + i * dk: the position of the first element of each head
+    self_attention(x, (mhsa_1 + i * dk),
                    (wq + d_model * dk * i), (q_bias + dk * i), 
                    (wk + d_model * dk * i), (k_bias + dk * i),
                    (wv + d_model * dk * i), (v_bias + dk * i),
-                   n, d_model, dk, i);
+                   n, d_model, dk);
   }
 
-  // // =================================================
-  // // Concatenate all the heads
-  // // =================================================
-  // 
-
-  // for (int k = 0; k < h; k++) {
-  //   for (int i = 0; i < n; i++) {
-  //     for (int j = 0; j < dk;) {
-  //       int vl = vsetvlmax_e32m1();
-  //       if (j + vl > dk) vl = vsetvl_e32m1(dk - j);
-
-  //       vfloat32m1_t vec = vle32_v_f32m1(&mhsa_1[k * n * dk + i * dk + j], vl);
-  //       vse32_v_f32m1(&mhsa_2[d_model * i + k * dk + j], vec, vl);
-
-  //       j += vl;
-  //     }
-  //   }
-  // }
-
   // =================================================
-  // Linear transformation with Wo
+  // Linear transformation with Wo and Residual Connection
   // =================================================
 
-  matmul_biased(mhsa_1, wo, mhsa_2, o_bias, n, d_model, d_model, 0);
-
-  // =================================================
-  // Residual Connection
-  // =================================================
-
-  matadd(mhsa_2, x, multihead_attn, n, d_model);
+  fmatmul_add(multihead_attn, mhsa_1, wo, o_bias, x, n, d_model, d_model);
 
   // =================================================
   // Layer Normalization

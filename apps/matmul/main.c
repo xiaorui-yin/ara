@@ -16,7 +16,7 @@
 
 #include <riscv_vector.h>
 #include <stdio.h>
-#include "kernel/utils.h"
+#include "kernel/fmatmul.h"
 #include "common/common.h"
 
 #ifndef SPIKE
@@ -28,9 +28,13 @@
 extern const int dim1, dim2, dim3; // row & column size
 extern float mat_a[] __attribute__((aligned(32 * NR_LANES))); // matrix data (N x M) to normalize
 extern float mat_b[] __attribute__((aligned(32 * NR_LANES))); // matrix data (N x M) to normalize
+extern float mat_c[] __attribute__((aligned(32 * NR_LANES))); // matrix data (N x M) to normalize
+extern float bias[] __attribute__((aligned(32 * NR_LANES))); // matrix data (N x M) to normalize
 extern float o_gold[] __attribute__((aligned(32 * NR_LANES)));
 extern float o[] __attribute__((aligned(32 * NR_LANES)));
 extern float o_t[] __attribute__((aligned(32 * NR_LANES)));
+extern float o_b[] __attribute__((aligned(32 * NR_LANES)));
+extern float o_a[] __attribute__((aligned(32 * NR_LANES)));
 
 int main() {
   printf("\n");
@@ -47,23 +51,31 @@ int main() {
 
 #ifndef SPIKE
   start_timer();
-  matmul(mat_a, mat_b, o, dim1, dim2, dim3, 0);
+  // fmatmul(o, mat_a, mat_b, dim1, dim2, dim3);
+  // fmatmul_transpose(o, mat_a, mat_b, dim1, dim2, dim3);
+  // fmatmul_bias(o, mat_a, mat_b, bias, dim1, dim2, dim3);
+  fmatmul_add(o, mat_a, mat_b, bias, mat_c, dim1, dim2, dim3);
   stop_timer();
   
   // Performance metrics
   int64_t runtime = get_timer();
-  float performance = (float)(2 * dim1 * dim2 * dim3) / runtime;
+  // float performance = (float)(2 * dim1 * dim2 * dim3) / runtime;
+  float performance = (float)(3 * dim1 * dim2 * dim3) / runtime; // one op more for add
   float utilization = (float)100 * performance / (2.0 * NR_LANES);
 
   printf("The execution took %d cycles.\n", runtime);
   printf("The performance is %f SPFLOP/cycle (%f%% utilization).\n",
         performance, utilization);
 #else
-  matmul(mat_a, mat_b, o, dim1, dim2, dim3, 0);
-  // matmul(mat_a, mat_b, o, dim1, dim2, dim3, 1);
+  // fmatmul(o, mat_a, mat_b, dim1, dim2, dim3);
+  // fmatmul_transpose(o, mat_a, mat_b, dim1, dim2, dim3);
+  // fmatmul_bias(o, mat_a, mat_b, bias, dim1, dim2, dim3);
+  // fmatmul_add(o, mat_a, mat_b, bias, mat_c, dim1, dim2, dim3);
+  fmatmul_concate(o, mat_a, mat_b, dim1, dim2, dim3, dim3);
 #endif
 
   printf("Verifying result\n");
   compare_matrix(o, o_gold, dim1, dim3);
   // compare_matrix(o, o_t, dim3, dim1);
+  // compare_matrix(o, o_a, dim1, dim3);
 }

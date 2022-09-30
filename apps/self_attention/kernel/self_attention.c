@@ -15,7 +15,7 @@
 // limitations under the License.
 
 #include "riscv_vector.h"
-#include "utils.h"
+#include "fmatmul.h"
 #include "softmax.h"
 
 #include <math.h>
@@ -23,7 +23,7 @@
 // #define SELF_ATTN_TEST
 
 void self_attention(float *x, float* o, float *wq, float *q_bias, float *wk, float *k_bias, 
-                    float *wv, float *v_bias, int n, int d_model, int dk, int k) {
+                    float *wv, float *v_bias, int n, int d_model, int dk) {
   // =================================================
   // Calculate matrices Q, K, V (x * W + bias)
   // =================================================
@@ -33,22 +33,24 @@ void self_attention(float *x, float* o, float *wq, float *q_bias, float *wk, flo
   float v[n * dk] __attribute__((aligned(32 * NR_LANES)));
 
   // Q
-  matmul_biased(x, wq, q, q_bias, n, d_model, dk, 0);
+  fmatmul_bias(q, x, wq, q_bias, n, d_model, dk);
 
   // K^T
-  matmul_biased(x, wk, k_t, k_bias, n, d_model, dk, 1);
+  fmatmul_bias_transpose(k_t, x, wk, k_bias, n, d_model, dk);
 
   // V
-  matmul_biased(x, wv, v, v_bias, n, d_model, dk, 0);
+  fmatmul_bias(v, x, wv, v_bias, n, d_model, dk);
 
   // =================================================
   // Calculate A = (Q * K^T) / sqrt(dk)
+  // scaling already done by weight and bias parameters
   // =================================================
   
   float a[n * n] __attribute__((aligned(32 * NR_LANES)));
 
-  float scale = (float)sqrt((double)dk);
-  matmul_scaled(q, k_t, a, scale, n, dk, n, 0);
+  // float scale = 1.0 / (float)sqrt((double)dk);
+  // matmul_scaled(q, k_t, a, scale, n, dk, n, 0);
+  fmatmul(a, q, k_t, n, dk, n);
 
   // =================================================
   // A = softmax(A)
@@ -64,32 +66,37 @@ void self_attention(float *x, float* o, float *wq, float *q_bias, float *wk, flo
   // attention = A_ * V
   // =================================================
 
-  // matmul(a, v, attn, n, n, dk, 0);
+  #ifndef SELF_ATTN_TEST
+    fmatmul_concate(o, a, v, n, n, dk, d_model);
+  #else
+    fmatmul(o, a, v, n, n, dk);
+  #endif /* !SELF_ATTN_TEST */
+
   // Store the result in the position after concatenation
 
-  size_t vlmax = vsetvlmax_e32m1();
-  vfloat32m1_t partial_sum;
+  // size_t vlmax = vsetvlmax_e32m1();
+  // vfloat32m1_t partial_sum;
 
-  for (int i = 0; i < n; i++) {
-    for (int j = 0; j < dk;) {
-      int vl = vlmax;
-      if (j + vlmax > dk) vl = vsetvl_e32m1(dk - j);
-      
-      partial_sum = vfmv_v_f_f32m1(0, vl);
+  // for (int i = 0; i < n; i++) {
+  //   for (int j = 0; j < dk;) {
+  //     int vl = vlmax;
+  //     if (j + vlmax > dk) vl = vsetvl_e32m1(dk - j);
+  //     
+  //     partial_sum = vfmv_v_f_f32m1(0, vl);
 
-      for (int k = 0; k < n; k++) {
-        vfloat32m1_t b_vec = vle32_v_f32m1(&v[k * dk + j], vl);
-        partial_sum = vfmacc_vf_f32m1(partial_sum, a[i * n + k], b_vec, vl);
-      }
+  //     for (int k = 0; k < n; k++) {
+  //       vfloat32m1_t b_vec = vle32_v_f32m1(&v[k * dk + j], vl);
+  //       partial_sum = vfmacc_vf_f32m1(partial_sum, a[i * n + k], b_vec, vl);
+  //     }
 
-      #ifdef SELF_ATTN_TEST
-        vse32_v_f32m1(&o[i * dk + j], partial_sum, vl);
-      #else
-        vse32_v_f32m1(&o[i * d_model + k * dk + j], partial_sum, vl);
-      #endif /* SELF_ATTN_TEST */
-      
-      j += vl;
-    }
-  }
+  //     #ifdef SELF_ATTN_TEST
+  //       vse32_v_f32m1(&o[i * dk + j], partial_sum, vl);
+  //     #else
+  //       vse32_v_f32m1(&o[i * d_model + k * dk + j], partial_sum, vl);
+  //     #endif /* SELF_ATTN_TEST */
+  //     
+  //     j += vl;
+  //   }
+  // }
 
 }

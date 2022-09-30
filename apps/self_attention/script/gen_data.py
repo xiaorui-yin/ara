@@ -58,6 +58,10 @@ v_bias = torch.randn(dk) * 3.14
 o = 10 * torch.randn((n, dk))
 o_gold = attention(x, wq, q_bias, wk, k_bias, wv, v_bias, dk)
 
+# Sclae weight and bias of Q to avoid hardware scaling
+scale = math.sqrt(dk)
+wq = wq / scale
+q_bias = q_bias / scale
 
 print(".section .data,\"aw\",@progbits")
 emit("n", np.array(n, dtype=np.int32))
