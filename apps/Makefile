@@ -64,8 +64,23 @@ $1/data.S:
 endef
 $(foreach app,$(APPS),$(eval $(call app_gen_data_template,$(app))))
 
+define vector_trace_template
+ideal_dispatcher/vtrace/$1.vtrace: bin/$1.spike $(VTRACE_SCRIPTS)
+	mkdir -p ideal_dispatcher/vtrace ideal_dispatcher/log ideal_dispatcher/temp
+	echo "run" | $(RISCV_SIM_MOD) $(RISCV_SIM_MOD_OPT) $$< 2> ideal_dispatcher/temp/$1.temp 1> ideal_dispatcher/log/$1.log
+	cd ideal_dispatcher && scripts/vtrace.sh temp/$1.temp vtrace/$1.vtrace
+endef
+$(foreach app,$(APPS),$(eval $(call vector_trace_template,$(app))))
+
+define app_compile_template_ideal
+bin/$1.ideal: bin/$1.spike ideal_dispatcher/vtrace/$1.vtrace
+	mkdir -p bin/
+	cp bin/$1.spike bin/$1.ideal
+endef
+$(foreach app,$(APPS),$(eval $(call app_compile_template_ideal,$(app))))
+
 define app_compile_template_spike
-bin/$1.spike: $1/data.S.o $(addsuffix .o.spike, $(shell find $(1) -name "*.c" -o -name "*.S")) $(RUNTIME_SPIKE) $(COMMON_SPIKE)
+bin/$1.spike: $1/data.S.o.spike $(addsuffix .o.spike, $(shell find $(1) -name "*.c" -o -name "*.S")) $(RUNTIME_SPIKE) $(COMMON_SPIKE)
 	mkdir -p bin/
 	$$(RISCV_CC) -Iinclude $$(RISCV_CCFLAGS_SPIKE) -o $$@ $$(addsuffix .o.spike, $$(shell find $(1) -name "*.c" -o -name "*.S")) $(RUNTIME_SPIKE) $$(RISCV_LDFLAGS_SPIKE) -DSPIKE
 	$$(RISCV_OBJDUMP) $$(RISCV_OBJDUMP_FLAGS) -D $$@ > $$@.dump
@@ -138,8 +153,15 @@ $(foreach app,$(APPS),$(eval $(call run_benchmark_spike,$(app))))
 riscv_tests_spike_clean:
 	make -C riscv-tests/isa clean
 
+.PHONY: benchmarks_clean
+benchmarks_clean:
+	cd $(APPS_DIR)/benchmarks && \
+	rm -vf *.S.* *.c.*        && \
+	rm -vf data/*.S.*         && \
+	rm -vf kernel/*.c.*
+
 .PHONY: clean
-clean: riscv_tests_spike_clean
+clean: riscv_tests_spike_clean benchmarks_clean
 	rm -vf $(BINARIES)
 	rm -vf $(CVA6_BINARIES)
 	rm -vf $(ARA_BINARIES)
@@ -149,6 +171,7 @@ clean: riscv_tests_spike_clean
 	rm -vf $(addsuffix /main.c.o,$(APPS))
 	rm -vf $(RUNTIME_GCC)
 	rm -vf $(RUNTIME_LLVM)
-	for app in $(APPS); do cd $${app} && rm -f ./*.c.o && rm -f ./*.S* && cd .. ; done
+	rm -vf $(RUNTIME_SPIKE)
+	for app in $(APPS); do cd $(APPS_DIR)/$${app} && rm -f ./*.c.o* && rm -f ./*.S* && cd .. ; done
 
 .INTERMEDIATE: $(addsuffix /main.c.o,$(APPS))

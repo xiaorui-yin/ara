@@ -434,9 +434,13 @@ jobs:
         else
           echo "base=HEAD~1" >> $GITHUB_ENV
         fi
-
+    # Don't check the `patches` directory! Trailing whitespaces
+    # are mandatory there if they exist.
     - name: Check for trailing whitespaces and tabs
-      run: git diff --check $base HEAD --
+      run: |
+        git diff --check $base HEAD -- \
+        apps config hardware .github   \
+        *.md Bender.* Makefile
 
 #####################
 #  Benchmark stage  #
@@ -474,7 +478,7 @@ jobs:
     - name: Untar Verilated model of Ara
       run: tar xvf ara.tar
     - name: Benchmark Ara
-      run: config=${{ matrix.ara_config }} ./scripts/benchmark.sh
+      run: config=${{ matrix.ara_config }} ./scripts/benchmark.sh ci
     - name: Tar runtime results
       run: |
         tar -cvf benchmarks-${{ matrix.ara_config }}.tar *.benchmark

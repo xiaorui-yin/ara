@@ -3,6 +3,14 @@
 # Python in use
 PYTHON=python3
 
+# Is this exectued by the CI?
+if [ "$1" == "ci" ]
+then
+    ci=1
+else
+    ci=0
+fi
+
 # Include Ara's configuration
 if [ -z ${config} ]; then
     if [ -z ${ARA_CONFIGURATION} ]; then
@@ -25,19 +33,34 @@ for kernel in imatmul fmatmul; do
 
     # Log the performance results
     > ${kernel}_${nr_lanes}.benchmark
+    > ${kernel}_${nr_lanes}_ideal.benchmark
 
     # Measure the following matrix sizes
     for size in 4 8 16 32 64 128; do
 
         tempfile=`mktemp`
 
+        # Clean, and then generate the correct matrix and filter
+		make -C apps/ clean
+
+        # Standard system
         ENV_DEFINES="-DSIZE=$size -D${kernel^^}=1" \
                make -C apps/ bin/benchmarks
         make -C hardware/ simv app=benchmarks > $tempfile || exit
+        # Extract the cycle count and calculate performance
+	    cycles=$(cat $tempfile | grep "\[cycles\]" | cut -d: -f2)
+        ./scripts/performance.py $kernel "$size" $cycles >> ${kernel}_${nr_lanes}.benchmark
 
-        # Extract the performance
-        cat $tempfile | grep "\[performance\]" | cut -d: -f2 >> ${kernel}_${nr_lanes}.benchmark
-
+        if [ "$ci" == 0 ]; then
+          # System with ideal dispatcher
+          ENV_DEFINES="-DSIZE=$size -D${kernel^^}=1" \
+                 make -C apps/ bin/benchmarks.ideal
+          touch -a hardware/build
+          make -C hardware/ -B simc app=benchmarks ideal_dispatcher=1 > $tempfile || exit
+          # Extract the cycle count and calculate performance
+	      cycles=$(cat $tempfile | grep "\[cycles\]" | cut -d: -f2)
+          ./scripts/performance.py $kernel "$size" $cycles >> ${kernel}_${nr_lanes}_ideal.benchmark
+        fi
     done
 done
 
@@ -50,6 +73,7 @@ for kernel in iconv2d fconv2d; do
 
     # Log the performance results
     > ${kernel}_${nr_lanes}.benchmark
+    > ${kernel}_${nr_lanes}_ideal.benchmark
 
     # Measure the following matrix and filter sizes
     # The input image is also padded, and the max vl is 128
@@ -60,18 +84,29 @@ for kernel in iconv2d fconv2d; do
             tempfile=`mktemp`
 
             # Clean, and then generate the correct matrix and filter
-            rm -f apps/benchmarks/data/*.S.o apps/benchmarks/kernels/*.S.o apps/benchmarks/kernels/*.c.o
 			make -C apps/ clean
 
 			mkdir -p apps/benchmarks/data
 			${PYTHON} apps/$kernel/script/gen_data.py $msize $fsize > apps/benchmarks/data/data.S
+
+            # Standard System
             ENV_DEFINES="-D${kernel^^}=1" \
                    make -C apps/ bin/benchmarks
             make -C hardware/ simv app=benchmarks > $tempfile || exit
-
             # Extract the performance
-            cat $tempfile | grep "\[performance\]" | cut -d: -f2 >> ${kernel}_${nr_lanes}.benchmark
+	        cycles=$(cat $tempfile | grep "\[cycles\]" | cut -d: -f2)
+            ./scripts/performance.py $kernel "$size $filter" $cycles >> ${kernel}_${nr_lanes}.benchmark
 
+            if [ "$ci" == 0 ]; then
+              # System with ideal dispatcher
+              ENV_DEFINES="-D${kernel^^}=1" \
+                     make -C apps/ bin/benchmarks.ideal
+              touch -a hardware/build
+              make -C hardware/ -B simc app=benchmarks ideal_dispatcher=1 > $tempfile || exit
+              # Extract the performance
+	          cycles=$(cat $tempfile | grep "\[cycles\]" | cut -d: -f2)
+              ./scripts/performance.py $kernel "$size $filter" $cycles >> ${kernel}_${nr_lanes}_ideal.benchmark
+            fi
         done
     done
 done
@@ -85,6 +120,7 @@ for kernel in fconv3d; do
 
     # Log the performance results
     > ${kernel}_${nr_lanes}.benchmark
+    > ${kernel}_${nr_lanes}_ideal.benchmark
 
     # Measure the following matrix and filter sizes
     # The input image is also padded, and the max vl is 128
@@ -95,18 +131,29 @@ for kernel in fconv3d; do
             tempfile=`mktemp`
 
             # Clean, and then generate the correct matrix and filter
-            rm -f apps/benchmarks/data/*.S.o apps/benchmarks/kernels/*.S.o apps/benchmarks/kernels/*.c.o
 			make -C apps/ clean
 
 			mkdir -p apps/benchmarks/data
             ${PYTHON} apps/$kernel/script/gen_data.py $msize $fsize > apps/benchmarks/data/data.S
+
+            # Standard System
             ENV_DEFINES="-D${kernel^^}=1" \
                    make -C apps/ bin/benchmarks
             make -C hardware/ simv app=benchmarks > $tempfile || exit
-
             # Extract the performance
-            cat $tempfile | grep "\[performance\]" | cut -d: -f2 >> ${kernel}_${nr_lanes}.benchmark
+	        cycles=$(cat $tempfile | grep "\[cycles\]" | cut -d: -f2)
+            ./scripts/performance.py $kernel "$size $filter" $cycles >> ${kernel}_${nr_lanes}.benchmark
 
+            if [ "$ci" == 0 ]; then
+              # System with ideal dispatcher
+              ENV_DEFINES="-D${kernel^^}=1" \
+                     make -C apps/ bin/benchmarks.ideal
+              touch -a hardware/build
+              make -C hardware/ -B simc app=benchmarks ideal_dispatcher=1 > $tempfile || exit
+              # Extract the performance
+	          cycles=$(cat $tempfile | grep "\[cycles\]" | cut -d: -f2)
+              ./scripts/performance.py $kernel "$size $filter" $cycles >> ${kernel}_${nr_lanes}_ideal.benchmark
+            fi
         done
     done
 done
