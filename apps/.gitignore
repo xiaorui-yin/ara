@@ -5,3 +5,4 @@ __pycache__/
 data.S
 *.spike
 spike_runs/
+ideal_dispatcher/

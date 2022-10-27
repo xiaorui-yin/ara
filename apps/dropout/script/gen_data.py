@@ -37,8 +37,8 @@ def emit(name, array, alignment='NR_LANES*32'):
 			s += "%02x" % bs[i+3-n]
 		print("    .word 0x%s" % s)
 
-row = 128
-col = 512
+row = 64
+col = 1024 * 4
 p = 0.1
 
 # Generate inputs

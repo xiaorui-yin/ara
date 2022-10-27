@@ -33,8 +33,8 @@ def emit(name, array, alignment='NR_LANES*32'):
 			s += "%02x" % bs[i+3-n]
 		print("    .word 0x%s" % s)
 
-row = 64
-col = 768
+row = 512
+col = 1024
 
 # Generate inputs
 mat   = 3.14 * torch.randn((row, col))

@@ -62,8 +62,8 @@ int main() {
   float layernorm_ops = (9.0 * n * d_model + n * 2);
   float layernorm_ops_ = (8.0 * n * d_model + n * 2); // 1 MAC operation
   float performance = (layernorm_ops + 4 * n * d_ff * d_model + n * d_ff + n * d_model + 2 * n * d_ff) / runtime;
-  float performance_1 = (layernorm_ops_ + 2 * n * d_ff * d_model + n * d_ff + n * d_model + 2 * n * d_ff) / runtime;
-  float utilization = 100.0 * performance / (2.0 * NR_LANES);
+  float performance_ = (layernorm_ops_ + 2 * n * d_ff * d_model + n * d_ff + n * d_model + 2 * n * d_ff) / runtime;
+  float utilization = 100.0 * performance_ / (2.0 * NR_LANES);
 
   printf("The execution took %d cycles.\n", runtime);
   printf("The performance is %f SPFLOP/cycle (%f%% utilization).\n",

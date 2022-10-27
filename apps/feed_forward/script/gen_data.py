@@ -35,7 +35,7 @@ def emit(name, array, alignment='NR_LANES*32'):
 			s += "%02x" % bs[i+3-n]
 		print("    .word 0x%s" % s)
 
-d_model = 768
+d_model = 1024
 n = 64
 d_ff = 4 * d_model
 

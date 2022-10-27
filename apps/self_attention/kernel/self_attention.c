@@ -20,6 +20,7 @@
 
 #include <math.h>
 
+// uncomment if running self_attention test
 // #define SELF_ATTN_TEST
 
 void self_attention(float *x, float* o, float *wq, float *q_bias, float *wk, float *k_bias, 

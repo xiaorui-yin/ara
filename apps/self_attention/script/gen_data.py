@@ -42,7 +42,7 @@ def attention(x, wq, q_bias, wk, k_bias, wv, v_bias, dk):
     score = torch.nn.Softmax(dim=1)(score)
     return torch.matmul(score, v)
 
-d_model = 768
+d_model = 1024
 dk = 64
 n = 64
 

@@ -40,8 +40,8 @@ def relu(mat):
     act = nn.ReLU()
     return act(torch.from_numpy(mat)).numpy().astype(np.float32)
 
-row = 64
-col = 256
+row = 512
+col = 1024 * 4
 
 # Generate inputs
 mat = rand_matrix(row, col)

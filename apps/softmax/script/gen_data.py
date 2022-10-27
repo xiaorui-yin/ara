@@ -67,7 +67,7 @@ def softmax(mat):
     return o
 
 
-row = 64
+row = 256
 col = 64
 
 # Generate inputs

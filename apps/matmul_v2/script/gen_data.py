@@ -36,7 +36,7 @@ def emit(name, array, alignment='NR_LANES*32'):
 
 dim1 = 64
 dim2 = 768
-dim3 = 3072
+dim3 = 64
 
 # Generate inputs
 mat_a = torch.rand((dim1, dim2))

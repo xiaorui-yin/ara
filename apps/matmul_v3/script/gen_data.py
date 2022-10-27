@@ -35,8 +35,8 @@ def emit(name, array, alignment='NR_LANES*32'):
 		print("    .word 0x%s" % s)
 
 dim1 = 64
-dim2 = 768
-dim3 = 3072
+dim2 = 128
+dim3 = 64
 
 # Generate inputs
 mat_a = torch.rand((dim1, dim2))

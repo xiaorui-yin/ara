@@ -36,8 +36,8 @@ def emit(name, array, alignment='NR_LANES*32'):
 			s += "%02x" % bs[i+3-n]
 		print("    .word 0x%s" % s)
 
-d_model = 768
-h = 12
+d_model = 1024
+h = 16
 dk = d_model // h
 n = 64
 
