@@ -1,3 +1,166 @@
+diff --git a/riscv/insns/vfbmacc_vf.h b/riscv/insns/vfbmacc_vf.h
+new file mode 100644
+index 00000000..81dc430e
+--- /dev/null
++++ b/riscv/insns/vfbmacc_vf.h
+@@ -0,0 +1,72 @@
++#define VI_VFP_BC_COMMON \
++  require_fp; \
++  require((P.VU.vsew == e16 && p->extension_enabled(EXT_ZFH)) || \
++          (P.VU.vsew == e32 && p->extension_enabled('F')) || \
++          (P.VU.vsew == e64 && p->extension_enabled('D'))); \
++  require_vector(true); \
++  require(STATE.frm->read() < 0x5); \
++  reg_t vl = P.VU.vl->read(); \
++  reg_t bl = P.VU.bl->read(); \
++  reg_t rd_num = insn.rd(); \
++  reg_t rs1_num = insn.rs1(); \
++  reg_t rs2_num = insn.rs2(); \
++  softfloat_roundingMode = STATE.frm->read();
++
++#define VI_VFP_BC_LOOP_BASE \
++  VI_VFP_COMMON \
++  for (reg_t i = P.VU.vstart->read(); i < vl; ++i) { \
++    rd_num += i; \
++    for (reg_t j = 0; j < bl; ++j) { \
++      VI_LOOP_ELEMENT_SKIP();
++
++#define VI_VFP_BC_LOOP_END \
++    } \
++  } \
++  P.VU.vstart->write(0);
++
++#define VFP_VF_BC_PARAMS(width) \
++  float##width##_t &vd = P.VU.elt<float##width##_t>(rd_num, j, true); \
++  float##width##_t rs1 = f##width(READ_FREG(rs1_num)); \
++  float##width##_t vs2 = P.VU.elt<float##width##_t>(rs2_num, i); \
++  float##width##_t bc  = P.VU.bc_elt<float##width##_t>(j);
++
++#define VI_VFP_VF_BC_LOOP(BODY16, BODY32, BODY64) \
++  VI_CHECK_SSS(false); \
++  VI_VFP_BC_LOOP_BASE \
++  switch (P.VU.vsew) { \
++    case e16: { \
++      VFP_VF_BC_PARAMS(16); \
++      BODY16; \
++      set_fp_exceptions; \
++      break; \
++    } \
++    case e32: { \
++      VFP_VF_BC_PARAMS(32); \
++      BODY32; \
++      set_fp_exceptions; \
++      break; \
++    } \
++    case e64: { \
++      VFP_VF_BC_PARAMS(64); \
++      BODY64; \
++      set_fp_exceptions; \
++      break; \
++    } \
++    default: \
++      require(0); \
++      break; \
++  }; \
++  DEBUG_RVV_FP_VF; \
++  VI_VFP_BC_LOOP_END
++
++VI_VFP_VF_BC_LOOP
++{{
++  vd = f16_mulAdd(bc, vs2, rs1);
++},
++{
++  vd = f32_mulAdd(bc, vs2, rs1);
++},
++{
++  vd = f64_mulAdd(bc, vs2, rs1);
++},
++}
+diff --git a/riscv/insns/vfbmacc_vv.h b/riscv/insns/vfbmacc_vv.h
+new file mode 100644
+index 00000000..dab5f163
+--- /dev/null
++++ b/riscv/insns/vfbmacc_vv.h
+@@ -0,0 +1,71 @@
++#define VI_VFP_BC_COMMON \
++  require_fp; \
++  require((P.VU.vsew == e16 && p->extension_enabled(EXT_ZFH)) || \
++          (P.VU.vsew == e32 && p->extension_enabled('F')) || \
++          (P.VU.vsew == e64 && p->extension_enabled('D'))); \
++  require_vector(true); \
++  require(STATE.frm->read() < 0x5); \
++  reg_t vl = P.VU.vl->read(); \
++  reg_t bl = P.VU.bl->read(); \
++  reg_t rd_num = insn.rd(); \
++  reg_t rs1_num = insn.rs1(); \
++  reg_t rs2_num = insn.rs2(); \
++  softfloat_roundingMode = STATE.frm->read();
++
++#define VI_VFP_BC_LOOP_BASE \
++  VI_VFP_COMMON \
++  for (reg_t i = P.VU.vstart->read(); i < vl; ++i) { \
++    rd_num += i; \
++    for (reg_t j = 0; j < bl; ++j) { \
++      VI_LOOP_ELEMENT_SKIP();
++
++#define VI_VFP_BC_LOOP_END \
++    } \
++  } \
++  P.VU.vstart->write(0);
++
++#define VFP_VV_BC_PARAMS(width) \
++  float##width##_t &vd = P.VU.elt<float##width##_t>(rd_num, j, true); \
++  float##width##_t vs2 = P.VU.elt<float##width##_t>(rs2_num, i); \
++  float##width##_t bc  = P.VU.bc_elt<float##width##_t>(j);
++
++#define VI_VFP_VV_BC_LOOP(BODY16, BODY32, BODY64) \
++  VI_CHECK_SSS(true); \
++  VI_VFP_BC_LOOP_BASE \
++  switch (P.VU.vsew) { \
++    case e16: { \
++      VFP_VV_BC_PARAMS(16); \
++      BODY16; \
++      set_fp_exceptions; \
++      break; \
++    } \
++    case e32: { \
++      VFP_VV_BC_PARAMS(32); \
++      BODY32; \
++      set_fp_exceptions; \
++      break; \
++    } \
++    case e64: { \
++      VFP_VV_BC_PARAMS(64); \
++      BODY64; \
++      set_fp_exceptions; \
++      break; \
++    } \
++    default: \
++      require(0); \
++      break; \
++  }; \
++  DEBUG_RVV_FP_VV; \
++  VI_VFP_BC_LOOP_END
++
++VI_VFP_VV_BC_LOOP
++{{
++  vd = f16_mulAdd(bc, vs2, vd);
++},
++{
++  vd = f32_mulAdd(bc, vs2, vd);
++},
++{
++  vd = f64_mulAdd(bc, vs2, vd);
++},
++}
+diff --git a/riscv/insns/vsetbl.h b/riscv/insns/vsetbl.h
+new file mode 100644
+index 00000000..a72b87b6
+--- /dev/null
++++ b/riscv/insns/vsetbl.h
+@@ -0,0 +1,2 @@
++require_vector_novtype(false, false);
++WRITE_RD(P.VU.set_bl(RS1));
 diff --git a/riscv/processor.cc b/riscv/processor.cc
 index 6d0d3499..b8ee8f68 100644
 --- a/riscv/processor.cc
