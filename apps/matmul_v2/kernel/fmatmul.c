@@ -38,21 +38,18 @@
 //   }
 // }
 
-void fmatmul(float *c, const float *a, const float *b,
-                   unsigned long int M, unsigned long int N,
-                   unsigned long int P) {
+void fmatmul(float *c, const float *a, const float *b, unsigned long int M,
+             unsigned long int N, unsigned long int P) {
   const int REUSE_SIZE = 1;
   // We work on 64 elements of the matrix B at once
-  unsigned long int block_size_p = 64;
+  unsigned long int block_size_p = 32;
   const unsigned long int block_size_m = NR_LANES * REUSE_SIZE;
   // block_size_m <= M, REUSE_SIZE * length of b_vec * 32 < VRF capacity
 
-  // asm volatile("vsetvli %0, %1, e32, m1, ta, ma" : "=r"(block_size_p) : "r"(P));
-  
   for (unsigned long int p = 0; p < P; p += block_size_p) {
     // Set the vector length
     const unsigned long int p_ = MIN(P - p, block_size_p);
-    
+
     // Find pointers to the submatrices
     const float *b_ = b + p;
     float *c_ = c + p;
@@ -64,27 +61,34 @@ void fmatmul(float *c, const float *a, const float *b,
 
       asm volatile("vsetvli zero, %0, e32, m1, ta, ma" ::"r"(m_));
 
+      // broadcast length = p_
+      int tmp = 0;
+      asm volatile("vsetbl t0, %0, %1" ::"r"(p_), "r"(tmp));
+
       // Find pointer to the submatrices
       const float *a_ = a + m * N;
       float *c__ = c_ + m * P;
 
-      // Initialize the accumulated result register
-      asm volatile("vmv.v.i v8, 0");
-
       int stride = 4 * N;
 
-      // asm volatile("vsetbl zero");
-      for (unsigned long int n = 0; n < N; n++) {
+      // First op with scalar zero
+      // load vec_a
+      asm volatile("vlse32.v v0, (%0), %1" ::"r"(a_), "r"(stride));
+      // load vec_b
+      asm volatile("vle32bc.v v31, (%0)" ::"r"(b_));
+      float t0 = 0; // First Operation, accumulated result is 0
+      asm volatile("vfbmacc.vf v8, %0, v0" ::"f"(t0));
+
+      for (unsigned long int n = 1; n < N; n++) {
         // load vec_a
         asm volatile("vlse32.v v0, (%0), %1" ::"r"(a_ + n), "r"(stride));
-        
-        // broadcast length = p_
         // load vec_b
-        asm volatile("vle32bc.v v0, (%0)" ::"r"(b_ + n));
-        asm volatile("vfbmacc.vv v8, v4, v0");
+        asm volatile("vle32bc.v v31, (%0)" ::"r"(b_ + n * N));
+        asm volatile("vfbmacc.vv v8, v31, v0");
       }
 
-      asm volatile("vsse32.v v8, (%0), %1" ::"r"(c__), "r"(m_));
+      asm volatile("vsetvli zero, %0, e32, m1, ta, ma" ::"r"(block_size_p));
+      asm volatile("vsse32.v v8, (%0), %1" ::"r"(c__), "r"(stride));
     }
   }
 }
