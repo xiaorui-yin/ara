@@ -1,4 +1,6 @@
 #include "fmatmul.h"
+// #include "printf.h"
+#include <stdio.h>
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 // ---------------
@@ -37,8 +39,9 @@ void fmatmul(float *c, const float *a, const float *b, const unsigned long int M
 
     // Set the broadcast length
     const unsigned long int p_ = MIN(P - p, block_size_p);
-    int tmp = 0;
-    asm volatile("vsetbl t0, %0, %1" ::"r"(p_), "r"(tmp));
+    int tmp1 = 0;
+    int tmp2 = 0;
+    asm volatile("vsetbl %0, %1, %2" ::"r"(tmp2), "r"(p_), "r"(tmp1));
 
     // Iterate over the rows
     for (unsigned long int m = 0; m < M; m += block_size_m) {
@@ -73,7 +76,7 @@ void fmatmul(float *c, const float *a, const float *b, const unsigned long int M
       // asm volatile("vle32bc.v v31, (%0)" ::"r"(b_ + 2 * P));
       // asm volatile("vfbmacc.vv v8, v31, v0");
 
-      for (unsigned long int n = 1; n < 3; n++) {
+      for (unsigned long int n = 1; n < N; n++) {
         // load vec_a
         asm volatile("vlse32.v v0, (%0), %1" ::"r"(a_ + n), "r"(stride_a));
         // load vec_b
@@ -82,6 +85,7 @@ void fmatmul(float *c, const float *a, const float *b, const unsigned long int M
       }
 
       asm volatile("vsetvli zero, %0, e32, m1, ta, ma" ::"r"(block_size_p * NR_LANES));
+      // printf("%d", stride_c);
       asm volatile("vsse32.v v8, (%0), %1" ::"r"(c__), "r"(stride_c));
     }
   }
