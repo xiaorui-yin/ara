@@ -54,9 +54,13 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
   vlen_t  vl_d, vl_q;
   vtype_t vtype_d, vtype_q;
 
+  logic[5:0] bl_d, bl_q;
+
   `FF(vstart_q, vstart_d, '0)
   `FF(vl_q, vl_d, '0)
   `FF(vtype_q, vtype_d, '{vill: 1'b1, default: '0})
+
+  `FF(bl_q, bl_d, '0)
 
   // Converts between the internal representation of `vtype_t` and the full XLEN-bit CSR.
   function automatic riscv::xlen_t xlen_vtype(vtype_t vtype);
@@ -216,6 +220,8 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
     eew_new_buffer_d = eew_new_buffer_q;
     vs_buffer_d      = vs_buffer_q;
 
+    bl_d         = bl_q;
+
     illegal_insn = 1'b0;
 
     is_vload      = 1'b0;
@@ -244,6 +250,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
 
     ara_req_d = '{
       vl           : vl_q,
+      bl           : bl_q,
       vstart       : vstart_q,
       vtype        : vtype_q,
       emul         : vtype_q.vlmul,
@@ -368,62 +375,67 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                   vtype_d = vtype_xlen(riscv::xlen_t'(insn.vsetivli_type.zimm10));
                 end else if (insn.vsetvl_type.func7 == 7'b100_0000) begin // vsetvl
                   vtype_d = vtype_xlen(acc_req_i.rs2[7:0]);
-                end else
+                end else if (insn.vsetvl_type.func7 != 7'b101_0000) begin // vsetbl
                   acc_resp_o.error = 1'b1;
 
-                // Check whether the updated vtype makes sense
-                if ((vtype_d.vsew > rvv_pkg::vew_e'($clog2(ELENB))) || // SEW <= ELEN
-                    (vtype_d.vlmul == LMUL_RSVD) ||                    // reserved value
-                    // LMUL >= SEW/ELEN
-                    (signed'($clog2(ELENB)) + signed'(vtype_d.vlmul) < signed'(vtype_d.vsew))) begin
-                  vtype_d = '{vill: 1'b1, default: '0};
-                  vl_d    = '0;
-                end
+                if (insn.vsetvl_type.func7 == 7'b101_0000) begin
+                  // Update bl
+                  bl_d = 6'(acc_req_i.rs1);
+                end else begin
+                  // Check whether the updated vtype makes sense
+                  if ((vtype_d.vsew > rvv_pkg::vew_e'($clog2(ELENB))) || // SEW <= ELEN
+                      (vtype_d.vlmul == LMUL_RSVD) ||                    // reserved value
+                      // LMUL >= SEW/ELEN
+                      (signed'($clog2(ELENB)) + signed'(vtype_d.vlmul) < signed'(vtype_d.vsew))) begin
+                    vtype_d = '{vill: 1'b1, default: '0};
+                    vl_d    = '0;
+                  end
 
-                // Update the vector length
-                else begin
-                  // Maximum vector length. VLMAX = LMUL * VLEN / SEW.
-                  automatic int unsigned vlmax = VLENB >> vtype_d.vsew;
-                  unique case (vtype_d.vlmul)
-                    LMUL_1  : vlmax <<= 0;
-                    LMUL_2  : vlmax <<= 1;
-                    LMUL_4  : vlmax <<= 2;
-                    LMUL_8  : vlmax <<= 3;
-                    // Fractional LMUL
-                    LMUL_1_2: vlmax >>= 1;
-                    LMUL_1_4: vlmax >>= 2;
-                    LMUL_1_8: vlmax >>= 3;
-                    default:;
-                  endcase
+                  // Update the vector length
+                  else begin
+                    // Maximum vector length. VLMAX = LMUL * VLEN / SEW.
+                    automatic int unsigned vlmax = VLENB >> vtype_d.vsew;
+                    unique case (vtype_d.vlmul)
+                      LMUL_1  : vlmax <<= 0;
+                      LMUL_2  : vlmax <<= 1;
+                      LMUL_4  : vlmax <<= 2;
+                      LMUL_8  : vlmax <<= 3;
+                      // Fractional LMUL
+                      LMUL_1_2: vlmax >>= 1;
+                      LMUL_1_4: vlmax >>= 2;
+                      LMUL_1_8: vlmax >>= 3;
+                      default:;
+                    endcase
 
-                  if (insn.vsetivli_type.func2 == 2'b11) begin // vsetivli
-                    vl_d = vlen_t'(insn.vsetivli_type.uimm5);
-                  end else begin // vsetvl || vsetvli
-                    if (insn.vsetvl_type.rs1 == '0 && insn.vsetvl_type.rd == '0) begin
-                      // Do not update the vector length
-                      vl_d = vl_q;
-                    end else if (insn.vsetvl_type.rs1 == '0 && insn.vsetvl_type.rd != '0) begin
-                      // Set the vector length to vlmax
-                      vl_d = vlmax;
-                    end else begin
-                      // Normal stripmining
-                      vl_d = ((|acc_req_i.rs1[$bits(acc_req_i.rs1)-1:$bits(vl_d)]) ||
-                        (vlen_t'(acc_req_i.rs1) > vlmax)) ? vlmax : vlen_t'(acc_req_i.rs1);
+                    if (insn.vsetivli_type.func2 == 2'b11) begin // vsetivli
+                      vl_d = vlen_t'(insn.vsetivli_type.uimm5);
+                    end else begin // vsetvl || vsetvli
+                      if (insn.vsetvl_type.rs1 == '0 && insn.vsetvl_type.rd == '0) begin
+                        // Do not update the vector length
+                        vl_d = vl_q;
+                      end else if (insn.vsetvl_type.rs1 == '0 && insn.vsetvl_type.rd != '0) begin
+                        // Set the vector length to vlmax
+                        vl_d = vlmax;
+                      end else begin
+                        // Normal stripmining
+                        vl_d = ((|acc_req_i.rs1[$bits(acc_req_i.rs1)-1:$bits(vl_d)]) ||
+                          (vlen_t'(acc_req_i.rs1) > vlmax)) ? vlmax : vlen_t'(acc_req_i.rs1);
+                      end
                     end
                   end
+
+                  // Return the new vl
+                  acc_resp_o.result = vl_d;
+
+                  // If the vtype has changed, wait for the backend before issuing any new instructions.
+                  // This is to avoid hazards on implicit register labels when LMUL_old > LMUL_new
+                  // and both the LMULs are greater then LMUL_1 (i.e., lmul[2] == 1'b0)
+                  // Checking only lmul_q is a trick: we want to stall only if both lmuls have
+                  // zero MSB. If lmul_q has zero MSB, it's greater than lmul_d only if also
+                  // lmul_d has zero MSB since the slice comparison is intrinsically unsigned
+                  if (!vtype_q.vlmul[2] && (vtype_d.vlmul[2:0] < vtype_q.vlmul[2:0]))
+                    state_d = WAIT_IDLE;
                 end
-
-                // Return the new vl
-                acc_resp_o.result = vl_d;
-
-                // If the vtype has changed, wait for the backend before issuing any new instructions.
-                // This is to avoid hazards on implicit register labels when LMUL_old > LMUL_new
-                // and both the LMULs are greater then LMUL_1 (i.e., lmul[2] == 1'b0)
-                // Checking only lmul_q is a trick: we want to stall only if both lmuls have
-                // zero MSB. If lmul_q has zero MSB, it's greater than lmul_d only if also
-                // lmul_d has zero MSB since the slice comparison is intrinsically unsigned
-                if (!vtype_q.vlmul[2] && (vtype_d.vlmul[2:0] < vtype_q.vlmul[2:0]))
-                  state_d = WAIT_IDLE;
               end
 
               OPIVV: begin: opivv
@@ -1845,6 +1857,11 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                       ara_req_d.op        = ara_pkg::VFMACC;
                       ara_req_d.use_vd_op = 1'b1;
                     end
+                    6'b111001: begin
+                      ara_req_d.op        = ara_pkg::VFBMACC;
+                      ara_req_d.use_vd_op = 1'b1;
+                      ara_req_d.use_vs1   = 1'b0; // vs1 = bc_vec
+                    end
                     6'b101101: begin
                       ara_req_d.op        = ara_pkg::VFNMACC;
                       ara_req_d.use_vd_op = 1'b1;
@@ -2105,6 +2122,9 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                       ara_req_d.op        = ara_pkg::VFMACC;
                       ara_req_d.use_vd_op = 1'b1;
                     end
+                    6'b111001: begin
+                      ara_req_d.op        = ara_pkg::VFBMACC;
+                    end
                     6'b101101: begin
                       ara_req_d.op        = ara_pkg::VFNMACC;
                       ara_req_d.use_vd_op = 1'b1;
@@ -2330,6 +2350,10 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                     illegal_insn     = 1'b1;
                     acc_req_ready_o  = 1'b1;
                     acc_resp_valid_o = 1'b1;
+                  end
+                  5'b11000: begin // Unit-strided, broadcast
+                    ara_req_d.op = VLEBC;
+                    ara_req_d.use_vd = 1'b0;
                   end
                   default: begin // Reserved
                     illegal_insn     = 1'b1;
