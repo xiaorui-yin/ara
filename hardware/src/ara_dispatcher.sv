@@ -54,7 +54,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
   vlen_t  vl_d, vl_q;
   vtype_t vtype_d, vtype_q;
 
-  logic[5:0] bl_d, bl_q;
+  vlen_t bl_d, bl_q;
 
   `FF(vstart_q, vstart_d, '0)
   `FF(vl_q, vl_d, '0)
@@ -380,7 +380,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
 
                 if (insn.vsetvl_type.func7 == 7'b101_0000) begin
                   // Update bl
-                  bl_d = 6'(acc_req_i.rs1);
+                  bl_d = vlen_t'(acc_req_i.rs1);
                 end else begin
                   // Check whether the updated vtype makes sense
                   if ((vtype_d.vsew > rvv_pkg::vew_e'($clog2(ELENB))) || // SEW <= ELEN

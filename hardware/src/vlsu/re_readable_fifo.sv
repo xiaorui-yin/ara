@@ -14,6 +14,7 @@
 // Description:
 // Data will be retained after reading, such that it can be read multiple times. Suuport data width conversion, but WR_DATA_WIDTH > RD_DATA_WIDTH
 // Use flush_i to invalidate data and load new data.
+// TODO: use external load_complete, here data_cnt == depth
 
 module re_readable_fifo #(
     parameter int unsigned WR_DATA_WIDTH   = 32,   // default data width if the fifo is of type logic
@@ -36,7 +37,7 @@ module re_readable_fifo #(
     // as long as the queue is not full we can push new data
     input  wr_dtype  data_i,           // data to push into the queue
     input  logic     push_i,           // data is valid and can be pushed to the queue
-    input  logic     final_push_i,     // TODO
+    output logic     load_finished_o,  // TODO
     // as long as the queue is not empty we can pop new elements
     output rd_dtype  data_o,           // output data
     input  logic     pop_i             // pop head from queue
@@ -58,8 +59,6 @@ module re_readable_fifo #(
 
     // TODO
     logic load_complete_d, load_complete_q;
-  
-    logic [ADDR_DEPTH:0] write_data_cnt_d, write_data_cnt_q;
 
     if (DEPTH == 0) begin : gen_pass_through
         assign empty_o     = ~push_i;
@@ -80,8 +79,8 @@ module re_readable_fifo #(
         mem_n           = mem_q;
         gate_clock      = 1'b1;
 
-        write_data_cnt_d = write_data_cnt_q;
-        load_complete_d  = (final_push_i) ? 1'b1 : load_complete_q;
+        load_complete_d  = load_complete_q;
+        load_finished_o  = 1'b0;
 
         if (~load_complete_q) begin
           // push a new element to the queue
@@ -94,17 +93,16 @@ module re_readable_fifo #(
               // un-gate the clock, we want to write something
               gate_clock = 1'b0;
               // increment the write counter
-              if (write_pointer_q == FifoDepth[ADDR_DEPTH-1:0] - 1)
+              if (write_pointer_q == FifoDepth[ADDR_DEPTH-1:0] - 1) begin
                   write_pointer_n = '0;
-              else
-                  /* write_pointer_n = write_pointer_q + 1; */
+                  load_complete_d = 1'b1;
+                  load_finished_o = 1'b1;
+              end else begin
                   write_pointer_n = write_pointer_q + RATIO;
+              end
 
               // increment the overall counter
-              /* status_cnt_n    = status_cnt_q + 1; */
-              /* write_data_cnt_d = write_data_cnt_q + 1; */
               status_cnt_n    = status_cnt_q + RATIO;
-              write_data_cnt_d = write_data_cnt_q + RATIO;
           end
 
           if (pop_i && ~empty_o) begin
@@ -124,7 +122,7 @@ module re_readable_fifo #(
         end else begin
           // read only state
           if (pop_i) begin
-            if (read_pointer_n == write_data_cnt_q - 1)
+            if (read_pointer_n == FifoDepth[ADDR_DEPTH-1:0] - 1)
                 read_pointer_n = '0;
             else
                 read_pointer_n = read_pointer_q + 1;
@@ -178,9 +176,6 @@ module re_readable_fifo #(
     empty_read : assert property(
         @(posedge clk_i) disable iff (~rst_ni) (empty_o |-> ~pop_i))
         else $fatal (1, "Trying to pop data although the FIFO is empty.");
-
-    invalide_ratio: assert (RATIO == Nr_Lanes)
-        else $error("The data width ratio must be the number of lanes.")  
 `endif
 // pragma translate_on
 

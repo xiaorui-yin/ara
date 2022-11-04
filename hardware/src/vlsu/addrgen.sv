@@ -229,7 +229,7 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
               endcase
 
               // Load element counter
-              idx_op_cnt_d = pe_req_i.vl;
+              idx_op_cnt_d = (pe_req_i.op == VLEBC) ? pe_req_i.bl : pe_req_i.vl;
             end
             default: state_d = ADDRGEN;
           endcase

@@ -198,13 +198,13 @@ module ara import ara_pkg::*; #(
 
   // Results
   // Load Unit
-  logic      [NrLanes-1:0]                     ldu_result_req;
-  vid_t      [NrLanes-1:0]                     ldu_result_id;
-  vaddr_t    [NrLanes-1:0]                     ldu_result_addr;
-  elen_t     [NrLanes-1:0]                     ldu_result_wdata;
-  strb_t     [NrLanes-1:0]                     ldu_result_be;
-  logic      [NrLanes-1:0]                     ldu_result_gnt;
-  logic      [NrLanes-1:0]                     ldu_result_final_gnt;
+  logic      [NrLanes-1:0]                     ldu_vrf_result_req;
+  vid_t      [NrLanes-1:0]                     ldu_vrf_result_id;
+  vaddr_t    [NrLanes-1:0]                     ldu_vrf_result_addr;
+  elen_t     [NrLanes-1:0]                     ldu_vrf_result_wdata;
+  strb_t     [NrLanes-1:0]                     ldu_vrf_result_be;
+  logic      [NrLanes-1:0]                     ldu_vrf_result_gnt;
+  logic      [NrLanes-1:0]                     ldu_vrf_result_final_gnt;
   // Slide Unit
   logic      [NrLanes-1:0]                     sldu_result_req;
   vid_t      [NrLanes-1:0]                     sldu_result_id;
@@ -254,13 +254,13 @@ module ara import ara_pkg::*; #(
       .sldu_result_gnt_o               (sldu_result_gnt[lane]               ),
       .sldu_result_final_gnt_o         (sldu_result_final_gnt[lane]         ),
       // Interface with the load unit
-      .ldu_result_req_i                (ldu_result_req[lane]                ),
-      .ldu_result_addr_i               (ldu_result_addr[lane]               ),
-      .ldu_result_id_i                 (ldu_result_id[lane]                 ),
-      .ldu_result_wdata_i              (ldu_result_wdata[lane]              ),
-      .ldu_result_be_i                 (ldu_result_be[lane]                 ),
-      .ldu_result_gnt_o                (ldu_result_gnt[lane]                ),
-      .ldu_result_final_gnt_o          (ldu_result_final_gnt[lane]          ),
+      .ldu_result_req_i                (ldu_vrf_result_req[lane]            ),
+      .ldu_result_addr_i               (ldu_vrf_result_addr[lane]           ),
+      .ldu_result_id_i                 (ldu_vrf_result_id[lane]             ),
+      .ldu_result_wdata_i              (ldu_vrf_result_wdata[lane]          ),
+      .ldu_result_be_i                 (ldu_vrf_result_be[lane]             ),
+      .ldu_result_gnt_o                (ldu_vrf_result_gnt[lane]            ),
+      .ldu_result_final_gnt_o          (ldu_vrf_result_final_gnt[lane]      ),
       // Interface with the store unit
       .stu_operand_o                   (stu_operand[lane]                   ),
       .stu_operand_valid_o             (stu_operand_valid[lane]             ),
@@ -290,6 +290,33 @@ module ara import ara_pkg::*; #(
     );
   end: gen_lanes
 
+  ////////////////////////
+  //  Broadcast Buffer  //
+  ////////////////////////
+
+  // Interface with the Load unit
+  logic      [NrLanes-1:0]                     ldu_bc_result_req;
+  vid_t      [NrLanes-1:0]                     ldu_bc_result_id;
+  vaddr_t    [NrLanes-1:0]                     ldu_bc_result_addr;
+  elen_t     [NrLanes-1:0]                     ldu_bc_result_wdata;
+  strb_t     [NrLanes-1:0]                     ldu_bc_result_be;
+  logic      [NrLanes-1:0]                     ldu_bc_result_gnt;
+  logic      [NrLanes-1:0]                     ldu_bc_result_final_gnt;
+
+  bc_buffer #(
+    .NrLanes(NrLanes)
+  ) i_bc_buffer(
+    .clk_i                    (clk_i                         ),
+    .rst_ni                   (rst_ni                        ),
+    // Interface with the load unit
+    .ldu_result_req_i         (ldu_bc_result_req             ),
+    .ldu_result_addr_i        (ldu_bc_result_addr            ),
+    .ldu_result_id_i          (ldu_bc_result_id              ),
+    .ldu_result_wdata_i       (ldu_bc_result_wdata           ),
+    .ldu_result_be_i          (ldu_bc_result_be              ),
+    .ldu_result_gnt_o         (ldu_bc_result_gnt             ),
+    .ldu_result_final_gnt_o   (ldu_bc_result_final_gnt       ),
+  );
 
   //////////////////////////////
   //  Vector Load/Store Unit  //
@@ -298,6 +325,15 @@ module ara import ara_pkg::*; #(
   // Interface with the Mask unit
   logic vldu_mask_ready;
   logic vstu_mask_ready;
+
+  logic      [NrLanes-1:0]  ldu_result_req;
+  vid_t      [NrLanes-1:0]  ldu_result_id;
+  vaddr_t    [NrLanes-1:0]  ldu_result_addr;
+  elen_t     [NrLanes-1:0]  ldu_result_wdata;
+  strb_t     [NrLanes-1:0]  ldu_result_be;
+  logic      [NrLanes-1:0]  ldu_result_gnt;
+  logic      [NrLanes-1:0]  ldu_result_final_gnt;
+  logic                     ldu_result_sel;
 
   vlsu #(
     .NrLanes     (NrLanes     ),
@@ -353,8 +389,44 @@ module ara import ara_pkg::*; #(
     .ldu_result_wdata_o         (ldu_result_wdata                                      ),
     .ldu_result_be_o            (ldu_result_be                                         ),
     .ldu_result_gnt_i           (ldu_result_gnt                                        ),
-    .ldu_result_final_gnt_i     (ldu_result_final_gnt                                  )
+    .ldu_result_final_gnt_i     (ldu_result_final_gnt                                  ),
+    .ldu_result_sel_o           (ldu_result_sel                                        )
   );
+
+  // Load data demultiplexer
+  if (ldu_result_sel) begin
+    // load data to the broadcast buffer
+    assign ldu_bc_result_req       = ldu_result_req;
+    assign ldu_bc_result_addr      = ldu_result_addr;
+    assign ldu_bc_result_id        = ldu_result_id;
+    assign ldu_bc_result_wdata     = ldu_result_wdata;
+    assign ldu_bc_result_be        = ldu_result_be;
+
+    assign ldu_vrf_result_req      = '0;
+    assign ldu_vrf_result_addr     = '0;
+    assign ldu_vrf_result_id       = '0;
+    assign ldu_vrf_result_wdata    = '0;
+    assign ldu_vrf_result_be       = '0;
+
+    assign ldu_result_gnt          = ldu_bc_result_gnt;
+    assign ldu_bc_result_final_gnt = ldu_bc_result_final_gnt;
+  end else begin
+    // load data to VRF
+    assign ldu_bc_result_req       = '0;
+    assign ldu_bc_result_addr      = '0;
+    assign ldu_bc_result_id        = '0;
+    assign ldu_bc_result_wdata     = '0;
+    assign ldu_bc_result_be        = '0;
+
+    assign ldu_vrf_result_req      = ldu_result_req;
+    assign ldu_vrf_result_addr     = ldu_result_addr;
+    assign ldu_vrf_result_id       = ldu_result_id;
+    assign ldu_vrf_result_wdata    = ldu_result_wdata;
+    assign ldu_vrf_result_be       = ldu_result_be;
+
+    assign ldu_result_gnt          = ldu_vrf_result_gnt;
+    assign ldu_bc_result_final_gnt = ldu_vrf_result_final_gnt;
+  end
 
   //////////////////
   //  Slide unit  //

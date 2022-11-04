@@ -114,7 +114,7 @@ package ara_pkg;
     // Div
     VDIVU, VDIV, VREMU, VREM,
     // FPU
-    VFADD, VFSUB, VFRSUB, VFMUL, VFDIV, VFRDIV, VFMACC, VFNMACC, VFMSAC, VFNMSAC, VFMADD, VFNMADD, VFMSUB,
+    VFADD, VFSUB, VFRSUB, VFMUL, VFDIV, VFRDIV, VFMACC, VFBMACC, VFNMACC, VFMSAC, VFNMSAC, VFMADD, VFNMADD, VFMSUB,
     VFNMSUB, VFSQRT, VFMIN, VFMAX, VFCLASS, VFSGNJ, VFSGNJN, VFSGNJX, VFCVTXUF, VFCVTXF, VFCVTFXU, VFCVTFX,
     VFCVTRTZXUF, VFCVTRTZXF, VFCVTFF,
     // Floating-point reductions
@@ -132,7 +132,7 @@ package ara_pkg;
     // Slide instructions
     VSLIDEUP, VSLIDEDOWN,
     // Load instructions
-    VLE, VLSE, VLXE,
+    VLE, VLEBC, VLSE, VLXE,
     // Store instructions
     VSE, VSSE, VSXE
   } ara_op_e;
@@ -293,6 +293,9 @@ package ara_pkg;
     vlen_t vstart;
     rvv_pkg::vtype_t vtype;
 
+    // Broadcast length
+    vlen_t bl;
+
     // Request token, for registration in the sequencer
     logic token;
   } ara_req_t;
@@ -389,6 +392,9 @@ package ara_pkg;
     vlen_t vl;
     vlen_t vstart;
     rvv_pkg::vtype_t vtype;
+
+    // Broadcast length
+    vlen_t bl;
 
     // Hazards
     logic [NrVInsn-1:0] hazard_vs1;
