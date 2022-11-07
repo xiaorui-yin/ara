@@ -1,40 +1,40 @@
 // Author: Xioarui Yin
 // Description:
 // Broadcast buffer receives the data read by the load unit from L2 cache,
-// and send it to the first lane (lane0) 
+// and send it to the first lane (lane0)
 // Only support fp32
 
-module bc_buffer 
+module bc_buffer
   import ara_pkg::*;
   import rvv_pkg::*;
   import matmul_pkg::*;
 #(
-  parameter  int  unsigned NrLanes = 0,
-  parameter  int  unsigned AxiDataWidth = 0,
+    parameter  int  unsigned NrLanes = 0,
+    parameter  int  unsigned AxiDataWidth = 0,
 
-  localparam int unsigned BufferCounterWidth = $clog2(MAX_BLEN)
+    localparam int unsigned BufferCounterWidth = $clog2(MAX_BLEN)
 ) (
-  input logic                            clk_i,
-  input logic                            rst_ni,
-  // Interface with the load unit
-  input logic              [NrLanes-1:0] ldu_result_req_i,
-  input vaddr_t            [NrLanes-1:0] ldu_result_addr_i,
-  input vid_t              [NrLanes-1:0] ldu_result_id_i,
-  input elen_t             [NrLanes-1:0] ldu_result_wdata_i,
-  input strb_t             [NrLanes-1:0] ldu_result_be_i, 
-  output logic             [NrLanes-1:0] ldu_result_gnt_o,
-  output logic             [NrLanes-1:0] ldu_result_final_gnt_o,
-  // Interface with the first lane
-  input logic                            bc_data_ready_i,
-  output elen_t                          bc_data_o,
-  output logic                           bc_data_valid_o,
-  input logic                            bc_data_invalidate_i
+    input logic                            clk_i,
+    input logic                            rst_ni,
+    // Interface with the load unit
+    input logic              [NrLanes-1:0] ldu_result_req_i,
+    input vaddr_t            [NrLanes-1:0] ldu_result_addr_i,
+    input vid_t              [NrLanes-1:0] ldu_result_id_i,
+    input elen_t             [NrLanes-1:0] ldu_result_wdata_i,
+    input strb_t             [NrLanes-1:0] ldu_result_be_i,
+    output logic             [NrLanes-1:0] ldu_result_gnt_o,
+    output logic             [NrLanes-1:0] ldu_result_final_gnt_o,
+    // Interface with the mini Slide Unit of the first lane
+    input logic                            bc_data_ready_i,
+    output elen_t                          bc_data_o,
+    output logic                           bc_data_valid_o,
+    input logic                            bc_data_invalidate_i
 );
 
   // =================================================================
   // Ping-Pang buffer
   // =================================================================
-  
+
   logic                    write_buffer_id_d, write_buffer_id_q,
                            read_buffer_id_d, read_buffer_id_q;
   logic [1:0]              buffer_flush;
@@ -83,19 +83,20 @@ module bc_buffer
   // ==============================================================
 
   always_comb begin
-    buffer_push       = 2'b00;
-    write_buffer_id_d = write_buffer_id_q;
-    ldu_result_gnt_o  = '0;
+    buffer_push            = 2'b00;
+    write_buffer_id_d      = write_buffer_id_q;
+    ldu_result_gnt_o       = '0;
+    ldu_result_final_gnt_o = '0;
 
     // Push if data is valid and the target FIFO is not full
     if (&ldu_result_req_i && ~buffer_full[write_buffer_id_q]) begin
       buffer_push[write_buffer_id_q] = 1'b1;
-      // TODO: final_gnt logic
-      ldu_result_gnt_o = '1;
+      ldu_result_gnt_o               = '1;
+      ldu_result_final_gnt_o         = '1;
     end
 
-    // Prepare the next round, change to another buffer
-    if (buffer_load_finished[write_buffer_id_q]) 
+    // Prepare the next round, switch to another buffer
+    if (buffer_load_finished[write_buffer_id_q])
       write_buffer_id_d = ~write_buffer_id_q;
   end
 
@@ -103,23 +104,44 @@ module bc_buffer
   // Buffer Read Control
   // ==============================================================
 
+  logic bc_data_valid_d, bc_data_valid_q;
+
+  assign bc_data_valid_o = bc_data_valid_q;
+
   always_comb begin
-    
+    read_buffer_id_d = read_buffer_id_q;
+    buffer_pop       = 2'b00;
+    bc_data_valid_d  = 1'b0;
+    buffer_flush     = 2'b00;
+
+    if (bc_data_ready_i && ~empty_o[read_buffer_id_q]) begin
+      buffer_pop[read_buffer_id_q] = 1'b1;
+      bc_data_valid_d              = 1'b1;
+    end
+
+    if (bc_data_invalidate_i) begin
+      buffer_flush[read_buffer_id_q] = 1'b1;
+      read_buffer_id_d               = ~read_buffer_id_q;
+    end
   end
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
-      bc_buffer_q <= '0;
+      write_buffer_id_q <= 1'b0;
+      read_buffer_id_q  <= 1'b0;
+      bc_data_valid_q   <= 1'b0;
     end else begin
-      bc_buffer_q <= bc_buffer_d;
+      write_buffer_id_q <= write_buffer_id_d;
+      read_buffer_id_q  <= read_buffer_id_d;
+      bc_data_valid_q   <= bc_data_valid_d;
     end
   end
 
   // =================================================================
   // Asserations
   // =================================================================
-  
-  if (MAX_BLEN % NrLanes != 0)
-    $error("The maximum broadcast vector length must be a multiple of the number of laens.")
 
-endmodule
+  if (MAX_BLEN % NrLanes != 0)
+    $error("The maximum broadcast vector length must be a multiple of the number of laens.");
+
+endmodule : bc_buffer

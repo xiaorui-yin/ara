@@ -47,6 +47,11 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
     input  elen_t                        sldu_operand_i,
     input  logic                         sldu_mfpu_valid_i,
     output logic                         sldu_mfpu_ready_o,
+    // Interface with the mini Slide Unit
+    input  logic                         bc_operand_i,
+    input  logic                         bc_valid_i,
+    output logic                         bc_ready_o,
+    output logic                         bc_invalidate_o, // lane 0
     // Interface with the Mask unit
     output elen_t                        mask_operand_o,
     output logic                         mask_operand_valid_o,
