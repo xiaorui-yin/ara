@@ -83,6 +83,14 @@ module lane import ara_pkg::*; import rvv_pkg::*; #(
     input  strb_t                                          masku_result_be_i,
     output logic                                           masku_result_gnt_o,
     output logic                                           masku_result_final_gnt_o,
+    // Broadcast data path
+    input  elen_t                                          bc_data_i,
+    output elen_t                                          bc_data_o,
+    input                                                  bc_data_valid_i,
+    input                                                  bc_data_valid_o,
+    // First lane only, to VMFPU
+    output                                                 bc_data_ready_o,
+    output                                                 bc_data_invalidate_o,
     // Interface between the Mask unit and the VFUs
     input  strb_t                                          mask_i,
     input  logic                                           mask_valid_i,
@@ -437,6 +445,20 @@ module lane import ara_pkg::*; import rvv_pkg::*; #(
   assign sldu_mfpu_valid   = sldu_red_valid_i & (sldu_mux_sel_q == MFPU_RED);
   assign sldu_result_gnt_o = sldu_mux_sel_q == NO_RED ? sldu_result_gnt_opqueues :
                             (sldu_mux_sel_q == ALU_RED ? sldu_alu_ready : sldu_mfpu_ready);
+
+  /*************************
+  *   Broadcast Data FF    *
+  *************************/
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      bc_data_o       <= '0;
+      bc_data_valid_o <= 1'b0;
+    end else begin
+      bc_data_o       <= bc_data_i;
+      bc_data_valid_o <= bc_data_valid_i;
+    end
+  end
 
   //////////////////
   //  Assertions  //

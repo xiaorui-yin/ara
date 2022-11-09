@@ -72,7 +72,7 @@ module bc_buffer
   always_comb begin
     buffer_din = '0;
     for (int i = 0; i < NrLanes; i++) begin
-      // FP32 only
+      // TODO: FP32 only
       buffer_din[32 * i +: 32]             = ldu_result_wdata_i[i][31:0];
       buffer_din[32 * (i + NrLanes) +: 32] = ldu_result_wdata_i[i][63:32];
     end
@@ -104,19 +104,20 @@ module bc_buffer
   // Buffer Read Control
   // ==============================================================
 
-  logic bc_data_valid_d, bc_data_valid_q;
+  /* logic bc_data_valid_d, bc_data_valid_q; */
 
-  assign bc_data_valid_o = bc_data_valid_q;
+  /* assign bc_data_valid_o = bc_data_valid_q; */
+  assign bc_data_valid_o = ~empty_o[read_buffer_id_q];
 
   always_comb begin
     read_buffer_id_d = read_buffer_id_q;
     buffer_pop       = 2'b00;
-    bc_data_valid_d  = 1'b0;
+    /* bc_data_valid_d  = bc_data_valid_q; */
     buffer_flush     = 2'b00;
 
     if (bc_data_ready_i && ~empty_o[read_buffer_id_q]) begin
       buffer_pop[read_buffer_id_q] = 1'b1;
-      bc_data_valid_d              = 1'b1;
+      /* bc_data_valid_d              = 1'b1; */
     end
 
     if (bc_data_invalidate_i) begin
@@ -133,7 +134,7 @@ module bc_buffer
     end else begin
       write_buffer_id_q <= write_buffer_id_d;
       read_buffer_id_q  <= read_buffer_id_d;
-      bc_data_valid_q   <= bc_data_valid_d;
+      /* bc_data_valid_q   <= bc_data_valid_d; */
     end
   end
 

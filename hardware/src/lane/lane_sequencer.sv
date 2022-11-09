@@ -205,6 +205,7 @@ module lane_sequencer import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::
         wide_fp_imm    : pe_req.wide_fp_imm,
         cvt_resize     : pe_req.cvt_resize,
         vtype          : pe_req.vtype,
+        bl             : pe_req.bl,
         default        : '0
       };
       vfu_operation_valid_d = (vfu_operation_d.vfu != VFU_None) ? 1'b1 : 1'b0;

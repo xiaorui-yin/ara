@@ -286,7 +286,19 @@ module ara import ara_pkg::*; #(
       .masku_result_final_gnt_o        (masku_result_final_gnt[lane]        ),
       .mask_i                          (mask[lane]                          ),
       .mask_valid_i                    (mask_valid[lane] & mask_valid_lane  ),
-      .mask_ready_o                    (lane_mask_ready[lane]               )
+      .mask_ready_o                    (lane_mask_ready[lane]               ),
+      // Broadcast data path
+      if (lane == 0) begin
+        .bc_data_i                       (),
+        .bc_data_o                       (),
+      end else if (lane != NrLanes-1) begin
+        .bc_data_i                       (bc_data_o[lane-1])
+        .bc_data_o
+      end
+      .bc_data_valid_i                 (),
+      .bc_data_valid_o                 (),
+      .bc_data_ready_o                 (),
+      .bc_data_invalidate_o            ()
     );
   end: gen_lanes
 
@@ -394,7 +406,7 @@ module ara import ara_pkg::*; #(
   );
 
   // Load data demultiplexer
-  if (ldu_result_sel) begin
+  if (ldu_result_sel) begin: g_bc_mode
     // load data to the broadcast buffer
     assign ldu_bc_result_req       = ldu_result_req;
     assign ldu_bc_result_addr      = ldu_result_addr;
@@ -410,7 +422,7 @@ module ara import ara_pkg::*; #(
 
     assign ldu_result_gnt          = ldu_bc_result_gnt;
     assign ldu_bc_result_final_gnt = ldu_bc_result_final_gnt;
-  end else begin
+  end else begin: g_normal_mode
     // load data to VRF
     assign ldu_bc_result_req       = '0;
     assign ldu_bc_result_addr      = '0;
