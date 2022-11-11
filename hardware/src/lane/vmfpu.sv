@@ -599,6 +599,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
   elen_t bc_commit_cnt_d, bc_commit_cnt_q;
   logic  bc_invalidate_d, bc_invalidate_q;
   logic  bc_ready_d, bc_ready_q;
+  logic [4:0] vd_inc_d, vd_inc_q;
 
   logic [1:0] op_a_element_pnt_d, op_a_element_pnt_q;
 
@@ -1083,6 +1084,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
     bc_process_cnt_d      = bc_process_cnt_q;
     bc_commit_cnt_d       = bc_commit_cnt_q;
     op_a_element_pnt_d    = op_a_element_pnt_q;
+    vd_inc_d              = vd_inc_q;
 
 
     // First lane only
@@ -1757,13 +1759,19 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
             mfpu_operand_ready_o[2] = vinsn_issue_q.use_vd_op;
             if (lane_id_i == '0) bc_ready_d = 1'b1; // request for the broadcast data
 
-            if (bc_issue_cnt_q == vinsn_issue_q.bl - 1) begin
+            // How many elements are we issuing?
+            automatic logic [3:0] issue_element_cnt =
+              (1 << (int'(EW64) - int'(vinsn_issue_q.vtype.vsew)));
+            // Update the number of elements still to be issued
+            if (issue_element_cnt > vinsn_issue_q.bl - bc_issue_cnt_q)
+              issue_element_cnt = vinsn_issue_q.bl - bc_issue_cnt_q;
+            bc_issue_cnt_d = bc_issue_cnt_q + issue_element_cnt;
+
+            if (bc_issue_cnt_d == vinsn_issue_q.bl) begin
               // Process only one element at a time
               issue_cnt_d = issue_cnt_q - 1;
-
               // Reset
               bc_issue_cnt_d = '0;
-
               // TODO: FP32 only, need to support other precisions
               if (op_a_element_pnt_q == 2'd1) begin
                 // Get the next element from A
@@ -1786,19 +1794,50 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
                 // Tell the buffer to prepare new data
                 if (lane_id_i == '0) bc_invalidate_d = 1'b1; // invalidate the buffer
               end
-            end else begin
-              bc_issue_cnt_d = bc_issue_cnt_q + 1;
             end
           end
         end
 
         if (vfpu_out_valid && !result_queue_full) begin
-          if (bc_process_cnt_q == vinsn_processing_q.bl - 1) begin
+          // How many elements have we processed?
+          automatic logic [3:0] processed_element_cnt =
+            (1 << (int'(EW64) - int'(vinsn_processing_q.vtype.vsew)));
+          // Update the number of elements still to be processed
+          if (processed_element_cnt > vinsn_processing_q.bl - bc_process_cnt_q)
+            processed_element_cnt = vinsn_processing_q.bl - bc_process_cnt_q;
+          bc_process_cnt_d = bc_process_cnt_q + processed_element_cnt;
+
+          if (bc_process_cnt_d == vinsn_processing_q.bl) begin
             to_process_cnt_d = to_process_cnt_q - 1;
-
             bc_process_cnt_d = '0;
+            // Write result to the next vector register
+            vd_inc_d         = vd_inc_q + 1;
 
+            if (to_process_cnt_d == '0) begin
+              vinsn_queue_d.processing_cnt -= 1;
+              // Bump issue processing pointers
+              if (vinsn_queue_q.processing_pnt == VInsnQueueDepth-1)
+                vinsn_queue_d.processing_pnt = '0;
+              else vinsn_queue_d.processing_pnt = vinsn_queue_q.processing_pnt + 1;
+
+              if (vinsn_queue_d.processing_cnt != 0) to_process_cnt_d =
+                vinsn_queue_q.vinsn[vinsn_queue_d.processing_pnt].vl;
+            end
           end
+
+          result_queue_d[result_queue_write_pnt_q].id = vinsn_processing_q.id;
+          // Write every bl elements to a new register
+          result_queue_d[result_queue_write_pnt_q].addr = vaddr(vinsn_processing_q.vd + vd_inc_q, NrLanes) +
+            (bc_process_cnt_q >> (int'(EW64) - vinsn_processing_q.vtype.vsew));
+          result_queue_d[result_queue_write_pnt_q].wdata = vfpu_processed_result;
+          result_queue_d[result_queue_write_pnt_q].be = '1; // TODO: depends on #elements
+          result_queue_valid_d[result_queue_write_pnt_q] = 1'b1;
+
+          result_queue_cnt_d += 1;
+          if (result_queue_write_pnt_q == ResultQueueDepth-1)
+            result_queue_write_pnt_d = 0;
+          else
+            result_queue_write_pnt_d = result_queue_write_pnt_q + 1;
         end
       end
       default:;
@@ -1839,9 +1878,16 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
 
       // Decrement the counter of remaining vector elements waiting to be written
       // Don't do it in case of a reduction
-      if (!is_reduction(vinsn_commit.op)) begin
+      if (!is_reduction(vinsn_commit.op) && vinsn_commit.op != VFBMACC) begin
         commit_cnt_d = commit_cnt_q - commit_element_cnt;
         if (commit_cnt_q < commit_element_cnt) commit_cnt_d = '0;
+      end else if (vinsn_commit.op == VFBMACC) begin
+        if (commit_element_cnt > vinsn_commit.bl - bc_commit_cnt_q)
+          commit_element_cnt = vinsn_commit.bl - bc_commit_cnt_q;
+        bc_commit_cnt_d = bc_commit_cnt_q + commit_element_cnt;
+        if (bc_commit_cnt_d == vinsn_commit.bl) begin
+          commit_cnt_d = commit_cnt_q - 1;
+        end
       end
     end
 
@@ -1977,7 +2023,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
       intra_issued_op_cnt_q   <= '0;
       intra_op_rx_cnt_q       <= '0;
       osum_issue_cnt_q        <= '0;
-      bc_issue_cnt_q                <= '0;
+      bc_issue_cnt_q          <= '0;
       bc_invalidate_q         <= 1'b0;
     end else begin
       issue_cnt_q             <= issue_cnt_d;
@@ -2001,7 +2047,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
       intra_issued_op_cnt_q   <= intra_issued_op_cnt_d;
       intra_op_rx_cnt_q       <= intra_op_rx_cnt_d;
       osum_issue_cnt_q        <= osum_issue_cnt_d;
-      bc_issue_cnt_q                <= bc_issue_cnt_d;
+      bc_issue_cnt_q          <= bc_issue_cnt_d;
       bc_invalidate_q         <= bc_invalidate_d;
     end
   end

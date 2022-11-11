@@ -361,6 +361,7 @@ module operand_requester import ara_pkg::*; import rvv_pkg::*; #(
 
             // Received a grant.
             if (|operand_requester_gnt) begin
+              // TODO: VFBMACC, change vd
               // Bump the address pointer
               requester_d.addr = requester_q.addr + 1'b1;
 
