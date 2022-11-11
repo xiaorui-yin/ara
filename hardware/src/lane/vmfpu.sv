@@ -594,9 +594,9 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
   // Broadcast MAC //
   ///////////////////
 
-  elen_t bc_issue_cnt_d, bc_issue_cnt_q;
-  elen_t bc_process_cnt_d, bc_process_cnt_q;
-  elen_t bc_commit_cnt_d, bc_commit_cnt_q;
+  vlen_t bc_issue_cnt_d, bc_issue_cnt_q;
+  vlen_t bc_process_cnt_d, bc_process_cnt_q;
+  vlen_t bc_commit_cnt_d, bc_commit_cnt_q;
   logic  bc_invalidate_d, bc_invalidate_q;
   logic  bc_ready_d, bc_ready_q;
   logic [4:0] vd_inc_d, vd_inc_q;
@@ -1754,11 +1754,6 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
           vfpu_in_valid = 1'b1;
 
           if (vfpu_in_ready) begin
-            mfpu_operand_ready_o[0] = 1'b0;
-            mfpu_operand_ready_o[1] = 1'b0;
-            mfpu_operand_ready_o[2] = vinsn_issue_q.use_vd_op;
-            if (lane_id_i == '0) bc_ready_d = 1'b1; // request for the broadcast data
-
             // How many elements are we issuing?
             automatic logic [3:0] issue_element_cnt =
               (1 << (int'(EW64) - int'(vinsn_issue_q.vtype.vsew)));
@@ -1766,6 +1761,11 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
             if (issue_element_cnt > vinsn_issue_q.bl - bc_issue_cnt_q)
               issue_element_cnt = vinsn_issue_q.bl - bc_issue_cnt_q;
             bc_issue_cnt_d = bc_issue_cnt_q + issue_element_cnt;
+
+            mfpu_operand_ready_o[0] = 1'b0;
+            mfpu_operand_ready_o[1] = 1'b0;
+            mfpu_operand_ready_o[2] = vinsn_issue_q.use_vd_op;
+            if (lane_id_i == '0) bc_ready_d = 1'b1; // request for the broadcast data
 
             if (bc_issue_cnt_d == vinsn_issue_q.bl) begin
               // Process only one element at a time

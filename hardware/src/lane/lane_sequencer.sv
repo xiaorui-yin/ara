@@ -342,6 +342,8 @@ module lane_sequencer import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::
             // values in the opqueues. So, vl must be 1 at least
             vl         : (pe_req.op inside {[VFREDUSUM:VFWREDOSUM]} && vfu_operation_d.vl == '0)
                         ? 1 : vfu_operation_d.vl,
+            is_bc      : (pe_req.op == VFBMACC),
+            bl         : pe_req.bl,
             vstart     : vfu_operation_d.vstart,
             vtype      : pe_req.vtype,
             hazard     : pe_req.swap_vs2_vd_op ?

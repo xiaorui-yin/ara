@@ -388,6 +388,7 @@ module operand_queue import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::i
 
   // Count how many operands were already produced
   vlen_t vl_d, vl_q;
+  vlen_t processed_vs_cnt_d, processed_vs_cnt_q;
 
   always_comb begin: obuf_control
     // Do not pop anything from the any of the queues
@@ -397,6 +398,8 @@ module operand_queue import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::i
     // Maintain state
     select_d = select_q;
     vl_d     = vl_q;
+
+    processed_vs_cnt_d = processed_vs_cnt_q;
 
     // Send the operand
     operand_o       = conv_operand;
@@ -422,7 +425,13 @@ module operand_queue import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::i
           if (SupportIntExt8) vl_d = vl_q + (1 << (int'(EW64) - int'(cmd.eew))) / 8;
         OpQueueIntReductionZExt, OpQueueFloatReductionZExt, OpQueueFloatReductionWideZExt:
           vl_d = vl_q + 1;
-        default: vl_d = vl_q + (1 << (int'(EW64) - int'(cmd.eew)));
+          default: begin
+            vl_d = vl_q + (1 << (int'(EW64) - int'(cmd.eew)));
+            if (cmd.is_bc && vl_d >= cmd.vl) begin
+              vl_d = '0;
+              processed_vs_cnt_d = processed_vs_cnt_q + 1;
+            end
+          end
       endcase
 
       // Update the pointer to the input operand
@@ -438,11 +447,13 @@ module operand_queue import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::i
       if ((select_q != '0 && select_d == '0) || cmd.conv == OpQueueConversionNone) ibuf_pop = 1'b1;
 
       // Finished execution
-      if (vl_d >= cmd.vl) begin
+      if ((~cmd.is_bc && vl_d >= cmd.vl) ||
+          (cmd.is_bc && processed_vs_cnt_d == cmd.num_vs)) begin
         ibuf_pop = 1'b1;
         cmd_pop  = 1'b1;
         select_d = '0;
         vl_d     = '0;
+        processed_vs_cnt_d = '0;
       end
     end
   end : obuf_control
@@ -451,9 +462,11 @@ module operand_queue import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::i
     if (!rst_ni) begin
       select_q <= '0;
       vl_q     <= '0;
+      processed_vs_cnt_q <= '0;
     end else begin
       select_q <= select_d;
       vl_q     <= vl_d;
+      processed_vs_cnt_q <= processed_vs_cnt_d;
     end
   end : p_type_conversion_ff
 

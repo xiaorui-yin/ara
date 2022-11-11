@@ -241,6 +241,10 @@ module operand_requester import ara_pkg::*; import rvv_pkg::*; #(
       // Hazards between vector instructions
       logic [NrVInsn-1:0] hazard;
 
+      // Broadcast mode
+      logic  is_bc;
+      vlen_t num_vs;
+
       // Widening instructions produces two writes of every read
       // In case of a WAW with a previous instruction,
       // read once every two writes of the previous instruction
@@ -264,6 +268,26 @@ module operand_requester import ara_pkg::*; import rvv_pkg::*; #(
     // Did we issue a word to this operand queue?
     assign operand_issued_o[requester] = |(operand_requester_gnt);
 
+    // Broadcast read address
+    vaddr_t      bc_addr_d, bc_addr_q;
+    vlen_t       bc_data_cnt_d, bc_data_cnt_q;
+    logic  [4:0] bc_vs_pnt_d, bc_vs_pnt_q;
+    vlen_t       bc_vs_cnt_d, bc_vs_cnt_q;
+
+    always_ff @(posedge clk_i or negedge rst_ni) begin
+      if (!rst_ni) begin
+        bc_addr_q     <= '0;
+        bc_data_cnt_q <= '0;
+        bc_vs_pnt_q   <= '0;
+        bc_vs_cnt_q   <= '0;
+      end else begin
+        bc_addr_q     <= bc_addr_d;
+        bc_data_cnt_q <= bc_data_cnt_d;
+        bc_vs_pnt_q   <= bc_vs_pnt_d;
+        bc_vs_cnt_q   <= bc_vs_cnt_d;
+      end
+    end
+
     always_comb begin: operand_requester
       // Maintain state
       state_d     = state_q;
@@ -279,6 +303,12 @@ module operand_requester import ara_pkg::*; import rvv_pkg::*; #(
       // Do not send any operand conversion commands
       operand_queue_cmd_o[requester]       = '0;
       operand_queue_cmd_valid_o[requester] = 1'b0;
+
+      // Maintain state
+      bc_addr_d     = bc_addr_q;
+      bc_vs_pnt_d   = bc_vs_pnt_q;
+      bc_vs_cnt_d   = bc_vs_cnt_q;
+      bc_data_cnt_d = bc_data_cnt_q;
 
       case (state_q)
         IDLE: begin
@@ -299,10 +329,14 @@ module operand_requester import ara_pkg::*; import rvv_pkg::*; #(
                            ((operand_request_i[requester].vl <<
                            operand_request_i[requester].vtype.vsew) >>
                            operand_request_i[requester].eew) :
-                           operand_request_i[requester].vl,
+                           ((operand_request_i[requester].is_bc) ?
+                           operand_request_i[requester].bl :
+                           operand_request_i[requester].vl),
               conv     : operand_request_i[requester].conv,
               ntr_red  : operand_request_i[requester].cvt_resize,
-              target_fu: operand_request_i[requester].target_fu
+              target_fu: operand_request_i[requester].target_fu,
+              is_bc    : operand_request_i[requester].is_bc,
+              num_vs   : operand_request_i[requester].vl
             };
             // The length should be at least one after the rescaling
             if (operand_queue_cmd_o[requester].vl == '0)
@@ -323,10 +357,14 @@ module operand_requester import ara_pkg::*; import rvv_pkg::*; #(
                               ((operand_request_i[requester].vl <<
                               operand_request_i[requester].vtype.vsew) >>
                               operand_request_i[requester].eew) :
-                              operand_request_i[requester].vl,
+                              ((operand_request_i[requester].is_bc) ?
+                              operand_request_i[requester].bl :
+                              operand_request_i[requester].vl),
               vew         : operand_request_i[requester].eew,
               hazard      : operand_request_i[requester].hazard,
               is_widening : operand_request_i[requester].cvt_resize == CVT_WIDE,
+              is_bc       : operand_request_i[requester].is_bc,
+              num_vs      : operand_request_i[requester].vl,
               default: '0
             };
             // The length should be at least one after the rescaling
@@ -338,6 +376,12 @@ module operand_requester import ara_pkg::*; import rvv_pkg::*; #(
               state_d                              = IDLE;
               operand_queue_cmd_valid_o[requester] = 1'b0;
             end
+
+            // Initialize broadcast related counters
+            bc_vs_cnt_d   = '0;
+            bc_vs_pnt_d   = operand_request_i[requester].vs;
+            bc_data_cnt_d = '0;
+            bc_addr_d     = vaddr(operand_request_i[requester].vs, NrLanes);
           end
         end
 
@@ -350,29 +394,43 @@ module operand_requester import ara_pkg::*; import rvv_pkg::*; #(
           if (operand_queue_ready_i[requester]) begin
             // Bank we are currently requesting
             automatic int bank = requester_q.addr[idx_width(NrBanks)-1:0];
+            if (requester_q.is_bc) bank = bc_addr_q[idx_width(NrBanks)-1:0];
 
             // Operand request
             operand_req[bank][requester] = !stall;
             operand_payload[requester]   = '{
-              addr   : requester_q.addr >> $clog2(NrBanks),
+              addr   : (requester_q.is_bc) ?
+                        bc_addr_q >> $clog2(NrBanks) :
+                        requester_q.addr >> $clog2(NrBanks),
               opqueue: opqueue_e'(requester),
               default: '0
             };
 
             // Received a grant.
             if (|operand_requester_gnt) begin
-              // TODO: VFBMACC, change vd
-              // Bump the address pointer
-              requester_d.addr = requester_q.addr + 1'b1;
+              if (requester_q.is_bc) begin
+                bc_data_cnt_d = bc_data_cnt_q + (1 << (int'(EW64) - int'(requester_q.vew)));
+                if (bc_data_cnt_d >= requester_q.len) begin
+                  bc_vs_cnt_d   = bc_vs_cnt_q + 1;
+                  bc_data_cnt_d = '0;
+                  bc_vs_pnt_d   = bc_vs_pnt_q + 1;
+                  bc_addr_d     = vaddr(bc_vs_pnt_d, NrLanes);
+                end else
+                  bc_addr_d = bc_addr_q + 1;
+              end else begin
+                // Bump the address pointer, not for broadcast mode
+                requester_d.addr = requester_q.addr + 1'b1;
 
-              // We read less than 64 bits worth of elements
-              if (requester_q.len < (1 << (int'(EW64) - int'(requester_q.vew))))
-                requester_d.len    = 0;
-              else requester_d.len = requester_q.len - (1 << (int'(EW64) - int'(requester_q.vew)));
+                // We read less than 64 bits worth of elements
+                if (requester_q.len < (1 << (int'(EW64) - int'(requester_q.vew))))
+                  requester_d.len    = 0;
+                else requester_d.len = requester_q.len - (1 << (int'(EW64) - int'(requester_q.vew)));
+              end
             end
 
             // Finished requesting all the elements
-            if (requester_d.len == '0) begin
+            if ((~requester_q.is_bc && requester_d.len == '0) ||
+                (requester_q.is_bc && bc_vs_cnt_d == requester_q.num_vs)) begin
               state_d = IDLE;
 
               // Accept a new instruction
@@ -388,10 +446,14 @@ module operand_requester import ara_pkg::*; import rvv_pkg::*; #(
                                ((operand_request_i[requester].vl <<
                                operand_request_i[requester].vtype.vsew) >>
                                operand_request_i[requester].eew) :
-                               operand_request_i[requester].vl,
+                               ((operand_request_i[requester].is_bc) ?
+                               operand_request_i[requester].bl :
+                               operand_request_i[requester].vl),
                   conv     : operand_request_i[requester].conv,
                   ntr_red  : operand_request_i[requester].cvt_resize,
-                  target_fu: operand_request_i[requester].target_fu
+                  target_fu: operand_request_i[requester].target_fu,
+                  is_bc    : operand_request_i[requester].is_bc,
+                  num_vs   : operand_request_i[requester].vl
                 };
                 operand_queue_cmd_valid_o[requester] = 1'b1;
                 // The length should be at least one after the rescaling
@@ -400,19 +462,31 @@ module operand_requester import ara_pkg::*; import rvv_pkg::*; #(
 
                 // Store the request
                 requester_d = '{
-                  id   : operand_request_i[requester].id,
-                  addr : vaddr(operand_request_i[requester].vs, NrLanes) +
-                  (operand_request_i[requester].vstart >>
-                    (int'(EW64) - int'(operand_request_i[requester].eew))),
-                  len    : (operand_request_i[requester].scale_vl) ?
-                             ((operand_request_i[requester].vl <<
-                             operand_request_i[requester].vtype.vsew) >>
-                             operand_request_i[requester].eew) :
-                             operand_request_i[requester].vl,
-                  vew    : operand_request_i[requester].eew,
-                  hazard : operand_request_i[requester].hazard,
+                  id          : operand_request_i[requester].id,
+                  addr        : vaddr(operand_request_i[requester].vs, NrLanes) +
+                                (operand_request_i[requester].vstart >>
+                                  (int'(EW64) - int'(operand_request_i[requester].eew))),
+                  len         : (operand_request_i[requester].scale_vl) ?
+                                  ((operand_request_i[requester].vl <<
+                                  operand_request_i[requester].vtype.vsew) >>
+                                  operand_request_i[requester].eew) :
+                                  (operand_request_i[requester].is_bc ?
+                                  operand_request_i[requester].bl :
+                                  operand_request_i[requester].vl),
+                  vew         : operand_request_i[requester].eew,
+                  hazard      : operand_request_i[requester].hazard,
+                  is_widening : operand_request_i[requester].cvt_resize == CVT_WIDE,
+                  is_bc       : operand_request_i[requester].is_bc,
+                  num_vs      : operand_request_i[requester].vl,
                   default: '0
                 };
+
+                // Initialize broadcast related counters
+                bc_vs_cnt_d   = '0;
+                bc_vs_pnt_d   = operand_request_i[requester].vs;
+                bc_data_cnt_d = '0;
+                bc_addr_d     = vaddr(operand_request_i[requester].vs, NrLanes);
+
                 // The length should be at least one after the rescaling
                 if (requester_d.len == '0)
                   requester_d.len = 1;

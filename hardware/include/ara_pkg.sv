@@ -889,6 +889,10 @@ package ara_pkg;
     vlen_t vl;
     vlen_t vstart;
 
+    // Broadcast mode
+    logic  is_bc;
+    vlen_t bl;
+
     // Hazards
     logic [NrVInsn-1:0] hazard;
   } operand_request_cmd_t;
@@ -899,6 +903,8 @@ package ara_pkg;
     opqueue_conversion_e conv; // Type conversion
     logic [1:0] ntr_red;       // Neutral type for reductions
     target_fu_e target_fu;     // Target FU of the opqueue (if it is not clear)
+    logic is_bc;               // Broadcast mode
+    vlen_t num_vs;             // Number of different registers
   } operand_queue_cmd_t;
 
   // This is the interface between the lane's sequencer and the lane's VFUs.
@@ -930,6 +936,9 @@ package ara_pkg;
     vlen_t vl;
     vlen_t vstart;
     rvv_pkg::vtype_t vtype;
+
+    // Broadcast length
+    vlen_t bl;
   } vfu_operation_t;
 
   // Due to the shuffled nature of the vector elements inside one lane, the byte enable
