@@ -70,6 +70,7 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
     vew_e vew;
     logic is_load;
     logic is_burst; // Unit-strided instructions can be converted into AXI INCR bursts
+    logic is_bc;
   } addrgen_req_t;
   addrgen_req_t addrgen_req;
   logic         addrgen_req_valid;
@@ -143,6 +144,23 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
     .data_o (idx_final_addr_q)
   );
 
+  /////////////////////////////
+  // Broadcast strided store //
+  /////////////////////////////
+  logic [1:0] bc_addr_cnt_d, bc_addr_cnt_q;
+  axi_addr_t  bc_addr_d, bc_addr_q;
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      bc_addr_cnt_q <= '0;
+      bc_addr_q     <= '0;
+    end else begin
+      bc_addr_cnt_q <= bc_addr_cnt_d;
+      bc_addr_q     <= bc_addr_d;
+    end
+  end
+
+
   //////////////////////////
   //  Address generation  //
   //////////////////////////
@@ -189,6 +207,9 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
     idx_final_addr_d        = idx_final_addr_q;
     last_elm_subw_d         = last_elm_subw_q;
 
+    bc_addr_d     = bc_addr_q;
+    bc_addr_cnt_d = bc_addr_cnt_q;
+
     // Support for indexed operations
     shuffled_word = addrgen_operand_i;
     // Deshuffle the whole NrLanes * 8 Byte word
@@ -229,7 +250,7 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
               endcase
 
               // Load element counter
-              idx_op_cnt_d = (pe_req_i.op == VLEBC) ? pe_req_i.bl : pe_req_i.vl;
+              idx_op_cnt_d = pe_req_i.vl;
             end
             default: state_d = ADDRGEN;
           endcase
@@ -244,14 +265,20 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
         end else begin
           addrgen_req = '{
             addr    : pe_req_q.scalar_op,
-            len     : pe_req_q.vl,
+            len     : (pe_req_q.op == VSSE && pe_req_q.bl != 0) ?
+                      pe_req_q.bl : pe_req_q.vl,
             stride  : pe_req_q.stride,
             vew     : pe_req_q.vtype.vsew,
             is_load : is_load(pe_req_q.op),
             // Unit-strided loads/stores trigger incremental AXI bursts.
-            is_burst: (pe_req_q.op inside {VLE, VSE})
+            is_burst: (pe_req_q.op inside {VLE, VSE}),
+            is_bc   : (pe_req_q.op == VSSE && pe_req_q.bl != 0)
           };
           addrgen_req_valid = 1'b1;
+
+          // Broadcast strided store initialization
+          bc_addr_cnt_d = '0;
+          bc_addr_d     = pe_req_q.scalar_op;
 
           if (addrgen_req_ready) begin
             addrgen_req_valid = '0;
@@ -647,7 +674,8 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
               // AW Channel
               else begin
                 axi_aw_o = '{
-                  addr   : axi_addrgen_q.addr,
+                  addr   : axi_addrgen_q.is_bc ?
+                           axi_addrgen_q.addr : bc_addr_q,
                   len    : 0,
                   size   : axi_addrgen_q.vew,
                   cache  : CACHE_MODIFIABLE,
@@ -659,7 +687,8 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
 
               // Send this request to the load/store units
               axi_addrgen_queue = '{
-                addr   : axi_addrgen_q.addr,
+                addr   : axi_addrgen_q.is_bc ?
+                         axi_addrgen_q.addr : bc_addr_q,
                 size   : axi_addrgen_q.vew,
                 len    : 0,
                 is_load: axi_addrgen_q.is_load
@@ -669,7 +698,17 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
               // Account for the requested operands
               axi_addrgen_d.len  = axi_addrgen_q.len - 1;
               // Calculate the addresses for the next iteration, adding the correct stride
-              axi_addrgen_d.addr = axi_addrgen_q.addr + axi_addrgen_q.stride;
+              if (axi_addrgen_q.is_bc) begin
+                bc_addr_cnt_d = bc_addr_cnt_q + 1;
+                if (bc_addr_cnt_d == NrLanes) begin
+                  bc_addr_cnt_d      = '0;
+                  // Increment base address by one element size
+                  axi_addrgen_d.addr = axi_addrgen_q.addr + 4; // TODO: 32-float only
+                  bc_addr_d          = axi_addrgen_d.addr;
+                end else
+                  bc_addr_d          = bc_addr_q + axi_addrgen_q.stride;
+              end else
+                axi_addrgen_d.addr = axi_addrgen_q.addr + axi_addrgen_q.stride;
 
               // Finished generating AXI requests
               if (axi_addrgen_d.len == 0) begin
