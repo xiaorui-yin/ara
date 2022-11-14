@@ -313,14 +313,45 @@ module ara_sequencer import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::i
 
             // WAR
             if (ara_req_i.use_vd) begin
-              pe_req_d.hazard_vs1[read_list_d[ara_req_i.vd].vid] |= read_list_d[ara_req_i.vd].valid;
-              pe_req_d.hazard_vs2[read_list_d[ara_req_i.vd].vid] |= read_list_d[ara_req_i.vd].valid;
-              pe_req_d.hazard_vm[read_list_d[ara_req_i.vd].vid] |= read_list_d[ara_req_i.vd].valid;
+              if (ara_req_i.op == VFBMACC) begin
+                // vl = NrLanes * REUSE_SIZE
+                // Assume NrLanes = 4, REUSE_SIZE = 2, vd = 8
+                // We need to use two vector registers for accumulated results
+                // vreg8, vreg9 should be added to the hazard table
+                for (int i=0; i<32; ++i) begin
+                  if ((i >= ara_req_i.vd) && (i - ara_req_i.vd < ara_req_i.vl / NrLanes)) begin
+                    pe_req_d.hazard_vs1[read_list_d[i].vid] |=
+                      read_list_d[i].valid;
+                    pe_req_d.hazard_vs2[read_list_d[i].vid] |=
+                      read_list_d[i].valid;
+                    pe_req_d.hazard_vm[read_list_d[i].vid] |=
+                      read_list_d[i].valid;
+                  end
+                end
+              end else begin
+                pe_req_d.hazard_vs1[read_list_d[ara_req_i.vd].vid] |=
+                  read_list_d[ara_req_i.vd].valid;
+                pe_req_d.hazard_vs2[read_list_d[ara_req_i.vd].vid] |=
+                  read_list_d[ara_req_i.vd].valid;
+                pe_req_d.hazard_vm[read_list_d[ara_req_i.vd].vid] |=
+                  read_list_d[ara_req_i.vd].valid;
+              end
             end
 
             // WAW
-            if (ara_req_i.use_vd) pe_req_d.hazard_vd[write_list_d[ara_req_i.vd].vid] |=
-              write_list_d[ara_req_i.vd].valid;
+            if (ara_req_i.use_vd) begin
+              if (ara_req_i.op == VFBMACC) begin
+                for (int i = 0; i < 32; i++) begin
+                  if ((i >= ara_req_i.vd) && (i - ara_req_i.vd < ara_req_i.vl / NrLanes)) begin
+                    pe_req_d.hazard_vd[write_list_d[i].vid] |=
+                      write_list_d[i].valid;
+                  end
+                end
+              end else begin
+                pe_req_d.hazard_vd[write_list_d[ara_req_i.vd].vid] |=
+                  write_list_d[ara_req_i.vd].valid;
+              end
+            end
 
             /////////////
             //  Issue  //
@@ -573,7 +604,7 @@ module ara_sequencer import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::i
                             : gold_ticket_q[i];
     // The instructions with a gold ticket can pass the checks even if the cnt is full,
     // but not when (insn_queue_cnt_q[i] == InsnQueueDepth[i] + 1)
-	// Moreover, just arrived instructions cannot use the golden ticket of a previous instruction
+    // Moreover, just arrived instructions cannot use the golden ticket of a previous instruction
     assign priority_pass[i] = gold_ticket_q[i] & (insn_queue_cnt_q[i] == InsnQueueDepth[i]) &
       (ara_req_token_q == ara_req_i.token);
     // The instruction queue [i] allows us to issue the instruction
