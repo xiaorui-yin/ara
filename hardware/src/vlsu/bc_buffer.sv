@@ -24,7 +24,7 @@ module bc_buffer
     input strb_t             [NrLanes-1:0] ldu_result_be_i,
     output logic             [NrLanes-1:0] ldu_result_gnt_o,
     output logic             [NrLanes-1:0] ldu_result_final_gnt_o,
-    // Interface with the mini Slide Unit of the first lane
+    // Interface with the first lane
     input logic                            bc_data_ready_i,
     output elen_t                          bc_data_o,
     output logic                           bc_data_valid_o,
