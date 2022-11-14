@@ -86,11 +86,11 @@ module lane import ara_pkg::*; import rvv_pkg::*; #(
     // Broadcast data path
     input  elen_t                                          bc_data_i,
     output elen_t                                          bc_data_o,
-    input                                                  bc_data_valid_i,
-    input                                                  bc_data_valid_o,
+    input  logic                                           bc_data_valid_i,
+    output logic                                           bc_data_valid_o,
     // First lane only, to VMFPU
-    output                                                 bc_data_ready_o,
-    output                                                 bc_data_invalidate_o,
+    output logic                                           bc_data_ready_o,
+    output logic                                           bc_data_invalidate_o,
     // Interface between the Mask unit and the VFUs
     input  strb_t                                          mask_i,
     input  logic                                           mask_valid_i,

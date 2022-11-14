@@ -46,7 +46,6 @@ sources:
     - hardware/src/vlsu/vldu.sv
     - hardware/src/vlsu/vstu.sv
     - hardware/src/vlsu/re_readable_fifo.sv
-    - hardware/src/lane/mini_sldu.sv
     # Level 2
     - hardware/src/lane/operand_queues_stage.sv
     - hardware/src/lane/valu.sv

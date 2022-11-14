@@ -4,32 +4,29 @@
 // and send it to the first lane (lane0)
 // Only support fp32
 
-module bc_buffer
-  import ara_pkg::*;
-  import rvv_pkg::*;
-  import matmul_pkg::*;
-#(
+module bc_buffer import ara_pkg::*; import rvv_pkg::*; #(
     parameter  int  unsigned NrLanes = 0,
     parameter  int  unsigned AxiDataWidth = 0,
 
-    localparam int unsigned BufferCounterWidth = $clog2(MAX_BLEN)
-) (
-    input logic                            clk_i,
-    input logic                            rst_ni,
+    localparam int  unsigned MAX_BLEN = 32,
+    localparam int  unsigned BufferCounterWidth = $clog2(MAX_BLEN)
+  ) (
+    input  logic                            clk_i,
+    input  logic                            rst_ni,
     // Interface with the load unit
-    input logic              [NrLanes-1:0] ldu_result_req_i,
-    input vaddr_t            [NrLanes-1:0] ldu_result_addr_i,
-    input vid_t              [NrLanes-1:0] ldu_result_id_i,
-    input elen_t             [NrLanes-1:0] ldu_result_wdata_i,
-    input strb_t             [NrLanes-1:0] ldu_result_be_i,
-    output logic             [NrLanes-1:0] ldu_result_gnt_o,
-    output logic             [NrLanes-1:0] ldu_result_final_gnt_o,
+    input  logic              [NrLanes-1:0] ldu_result_req_i,
+    // input  vid_t              [NrLanes-1:0] ldu_result_id_i,
+    // input  vaddr_t            [NrLanes-1:0] ldu_result_addr_i,
+    input  elen_t             [NrLanes-1:0] ldu_result_wdata_i,
+    // input  strb_t             [NrLanes-1:0] ldu_result_be_i,
+    output logic              [NrLanes-1:0] ldu_result_gnt_o,
+    output logic              [NrLanes-1:0] ldu_result_final_gnt_o,
     // Interface with the first lane
-    input logic                            bc_data_ready_i,
-    output elen_t                          bc_data_o,
-    output logic                           bc_data_valid_o,
-    input logic                            bc_data_invalidate_i
-);
+    input  logic                            bc_data_ready_i,
+    output elen_t                           bc_data_o,
+    output logic                            bc_data_valid_o,
+    input  logic                            bc_data_invalidate_i
+  );
 
   // =================================================================
   // Ping-Pang buffer
@@ -107,7 +104,7 @@ module bc_buffer
   /* logic bc_data_valid_d, bc_data_valid_q; */
 
   /* assign bc_data_valid_o = bc_data_valid_q; */
-  assign bc_data_valid_o = ~empty_o[read_buffer_id_q];
+  assign bc_data_valid_o = ~buffer_empty[read_buffer_id_q];
 
   always_comb begin
     read_buffer_id_d = read_buffer_id_q;
@@ -115,7 +112,7 @@ module bc_buffer
     /* bc_data_valid_d  = bc_data_valid_q; */
     buffer_flush     = 2'b00;
 
-    if (bc_data_ready_i && ~empty_o[read_buffer_id_q]) begin
+    if (bc_data_ready_i && ~buffer_empty[read_buffer_id_q]) begin
       buffer_pop[read_buffer_id_q] = 1'b1;
       /* bc_data_valid_d              = 1'b1; */
     end
@@ -130,7 +127,7 @@ module bc_buffer
     if (!rst_ni) begin
       write_buffer_id_q <= 1'b0;
       read_buffer_id_q  <= 1'b0;
-      bc_data_valid_q   <= 1'b0;
+      // bc_data_valid_q   <= 1'b0;
     end else begin
       write_buffer_id_q <= write_buffer_id_d;
       read_buffer_id_q  <= read_buffer_id_d;

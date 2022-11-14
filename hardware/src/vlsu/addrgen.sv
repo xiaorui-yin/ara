@@ -147,7 +147,8 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
   /////////////////////////////
   // Broadcast strided store //
   /////////////////////////////
-  logic [1:0] bc_addr_cnt_d, bc_addr_cnt_q;
+
+  logic [$clog2(NrLanes)-1:0] bc_addr_cnt_d, bc_addr_cnt_q;
   axi_addr_t  bc_addr_d, bc_addr_q;
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
@@ -206,9 +207,6 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
     word_lane_ptr_d         = word_lane_ptr_q;
     idx_final_addr_d        = idx_final_addr_q;
     last_elm_subw_d         = last_elm_subw_q;
-
-    bc_addr_d     = bc_addr_q;
-    bc_addr_cnt_d = bc_addr_cnt_q;
 
     // Support for indexed operations
     shuffled_word = addrgen_operand_i;
@@ -276,10 +274,6 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
           };
           addrgen_req_valid = 1'b1;
 
-          // Broadcast strided store initialization
-          bc_addr_cnt_d = '0;
-          bc_addr_d     = pe_req_q.scalar_op;
-
           if (addrgen_req_ready) begin
             addrgen_req_valid = '0;
             addrgen_ack_o     = 1'b1;
@@ -298,7 +292,8 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
           vew     : pe_req_q.vtype.vsew,
           is_load : is_load(pe_req_q.op),
           // Unit-strided loads/stores trigger incremental AXI bursts.
-          is_burst: 1'b0
+          is_burst: 1'b0,
+          is_bc   : 1'b0
         };
         addrgen_req_valid = 1'b1;
 
@@ -489,11 +484,18 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
     axi_aw_o       = '0;
     axi_aw_valid_o = 1'b0;
 
+    bc_addr_d     = bc_addr_q;
+    bc_addr_cnt_d = bc_addr_cnt_q;
+
     case (axi_addrgen_state_q)
       AXI_ADDRGEN_IDLE: begin
         if (addrgen_req_valid) begin
           axi_addrgen_d       = addrgen_req;
           axi_addrgen_state_d = core_st_pending_i ? AXI_ADDRGEN_WAITING : AXI_ADDRGEN_REQUESTING;
+
+          // Broadcast strided store initialization
+          bc_addr_cnt_d = '0;
+          bc_addr_d     = addrgen_req.addr;
 
           // In case of a misaligned store, reduce the effective width of the AXI transaction,
           // since the store unit does not support misalignments between the AXI bus and the lanes

@@ -377,6 +377,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                   vtype_d = vtype_xlen(acc_req_i.rs2[7:0]);
                 end else if (insn.vsetvl_type.func7 != 7'b101_0000) begin // vsetbl
                   acc_resp_o.error = 1'b1;
+                end
 
                 if (insn.vsetvl_type.func7 == 7'b101_0000) begin
                   // Update bl

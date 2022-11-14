@@ -197,16 +197,17 @@ module ara import ara_pkg::*; #(
   logic                                        bc_data_invalidate;
 
   bc_buffer #(
-    .NrLanes(NrLanes)
+    .NrLanes                  (NrLanes                       ),
+    .AxiDataWidth             (AxiDataWidth                  )
   ) i_bc_buffer(
     .clk_i                    (clk_i                         ),
     .rst_ni                   (rst_ni                        ),
     // Interface with the load unit
     .ldu_result_req_i         (ldu_bc_result_req             ),
-    .ldu_result_addr_i        (ldu_bc_result_addr            ),
-    .ldu_result_id_i          (ldu_bc_result_id              ),
+    // .ldu_result_addr_i        (ldu_bc_result_addr            ),
+    // .ldu_result_id_i          (ldu_bc_result_id              ),
     .ldu_result_wdata_i       (ldu_bc_result_wdata           ),
-    .ldu_result_be_i          (ldu_bc_result_be              ),
+    // .ldu_result_be_i          (ldu_bc_result_be              ),
     .ldu_result_gnt_o         (ldu_bc_result_gnt             ),
     .ldu_result_final_gnt_o   (ldu_bc_result_final_gnt       ),
     .bc_data_ready_i          (bc_data_ready                 ),
@@ -431,38 +432,41 @@ module ara import ara_pkg::*; #(
   );
 
   // Load data demultiplexer
-  if (ldu_result_sel) begin: g_bc_mode
-    // load data to the broadcast buffer
-    assign ldu_bc_result_req       = ldu_result_req;
-    assign ldu_bc_result_addr      = ldu_result_addr;
-    assign ldu_bc_result_id        = ldu_result_id;
-    assign ldu_bc_result_wdata     = ldu_result_wdata;
-    assign ldu_bc_result_be        = ldu_result_be;
+  always_comb begin
+    ldu_bc_result_req       = '0;
+    ldu_bc_result_addr      = '0;
+    ldu_bc_result_id        = '0;
+    ldu_bc_result_wdata     = '0;
+    ldu_bc_result_be        = '0;
+    ldu_vrf_result_req      = '0;
+    ldu_vrf_result_addr     = '0;
+    ldu_vrf_result_id       = '0;
+    ldu_vrf_result_wdata    = '0;
+    ldu_vrf_result_be       = '0;
+    ldu_result_gnt          = '0;
+    ldu_bc_result_final_gnt = '0;
 
-    assign ldu_vrf_result_req      = '0;
-    assign ldu_vrf_result_addr     = '0;
-    assign ldu_vrf_result_id       = '0;
-    assign ldu_vrf_result_wdata    = '0;
-    assign ldu_vrf_result_be       = '0;
+    if (ldu_result_sel == 1'b1) begin
+      // load data to the broadcast buffer
+      ldu_bc_result_req       = ldu_result_req;
+      // ldu_bc_result_addr      = ldu_result_addr;
+      // ldu_bc_result_id        = ldu_result_id;
+      ldu_bc_result_wdata     = ldu_result_wdata;
+      // ldu_bc_result_be        = ldu_result_be;
 
-    assign ldu_result_gnt          = ldu_bc_result_gnt;
-    assign ldu_bc_result_final_gnt = ldu_bc_result_final_gnt;
-  end else begin: g_normal_mode
-    // load data to VRF
-    assign ldu_bc_result_req       = '0;
-    assign ldu_bc_result_addr      = '0;
-    assign ldu_bc_result_id        = '0;
-    assign ldu_bc_result_wdata     = '0;
-    assign ldu_bc_result_be        = '0;
+      ldu_result_gnt          = ldu_bc_result_gnt;
+      ldu_bc_result_final_gnt = ldu_bc_result_final_gnt;
+    end else begin
+      // load data to VRF
+      ldu_vrf_result_req      = ldu_result_req;
+      ldu_vrf_result_addr     = ldu_result_addr;
+      ldu_vrf_result_id       = ldu_result_id;
+      ldu_vrf_result_wdata    = ldu_result_wdata;
+      ldu_vrf_result_be       = ldu_result_be;
 
-    assign ldu_vrf_result_req      = ldu_result_req;
-    assign ldu_vrf_result_addr     = ldu_result_addr;
-    assign ldu_vrf_result_id       = ldu_result_id;
-    assign ldu_vrf_result_wdata    = ldu_result_wdata;
-    assign ldu_vrf_result_be       = ldu_result_be;
-
-    assign ldu_result_gnt          = ldu_vrf_result_gnt;
-    assign ldu_bc_result_final_gnt = ldu_vrf_result_final_gnt;
+      ldu_result_gnt          = ldu_vrf_result_gnt;
+      ldu_bc_result_final_gnt = ldu_vrf_result_final_gnt;
+    end
   end
 
   //////////////////

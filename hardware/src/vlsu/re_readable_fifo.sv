@@ -137,20 +137,17 @@ module re_readable_fifo #(
             write_pointer_q <= '0;
             status_cnt_q    <= '0;
             load_complete_q <= 1'b0;
-            write_data_cnt_q <= '0;
         end else begin
             if (flush_i) begin
                 read_pointer_q  <= '0;
                 write_pointer_q <= '0;
                 status_cnt_q    <= '0;
                 load_complete_q <= 1'b0;
-                write_data_cnt_q <= '0;
              end else begin
                 read_pointer_q  <= read_pointer_n;
                 write_pointer_q <= write_pointer_n;
                 status_cnt_q    <= status_cnt_n;
                 load_complete_q <= load_complete_d;
-                write_data_cnt_q <= write_data_cnt_d;
             end
         end
     end
