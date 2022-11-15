@@ -269,7 +269,7 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
             vew     : pe_req_q.vtype.vsew,
             is_load : is_load(pe_req_q.op),
             // Unit-strided loads/stores trigger incremental AXI bursts.
-            is_burst: (pe_req_q.op inside {VLE, VSE}),
+            is_burst: (pe_req_q.op inside {VLE, VLEBC, VSE}),
             is_bc   : (pe_req_q.op == VSSE && pe_req_q.bl != 0)
           };
           addrgen_req_valid = 1'b1;

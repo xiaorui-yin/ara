@@ -15,17 +15,17 @@ module bc_buffer import ara_pkg::*; import rvv_pkg::*; #(
     input  logic                            rst_ni,
     // Interface with the load unit
     input  logic              [NrLanes-1:0] ldu_result_req_i,
-    // input  vid_t              [NrLanes-1:0] ldu_result_id_i,
-    // input  vaddr_t            [NrLanes-1:0] ldu_result_addr_i,
+    /* input  vid_t              [NrLanes-1:0] ldu_result_id_i, */
+    /* input  vaddr_t            [NrLanes-1:0] ldu_result_addr_i, */
     input  elen_t             [NrLanes-1:0] ldu_result_wdata_i,
-    // input  strb_t             [NrLanes-1:0] ldu_result_be_i,
+    /* input  strb_t             [NrLanes-1:0] ldu_result_be_i, */
     output logic              [NrLanes-1:0] ldu_result_gnt_o,
     output logic              [NrLanes-1:0] ldu_result_final_gnt_o,
     // Interface with the first lane
-    input  logic                            bc_data_ready_i,
+    input  logic                            bc_ready_i,
     output elen_t                           bc_data_o,
-    output logic                            bc_data_valid_o,
-    input  logic                            bc_data_invalidate_i
+    output logic                            bc_valid_o,
+    input  logic                            bc_invalidate_i
   );
 
   // =================================================================
@@ -101,23 +101,23 @@ module bc_buffer import ara_pkg::*; import rvv_pkg::*; #(
   // Buffer Read Control
   // ==============================================================
 
-  /* logic bc_data_valid_d, bc_data_valid_q; */
+  /* logic bc_valid_d, bc_valid_q; */
 
-  /* assign bc_data_valid_o = bc_data_valid_q; */
-  assign bc_data_valid_o = ~buffer_empty[read_buffer_id_q];
+  /* assign bc_valid_o = bc_valid_q; */
+  assign bc_valid_o = ~buffer_empty[read_buffer_id_q];
 
   always_comb begin
     read_buffer_id_d = read_buffer_id_q;
     buffer_pop       = 2'b00;
-    /* bc_data_valid_d  = bc_data_valid_q; */
+    /* bc_valid_d  = bc_valid_q; */
     buffer_flush     = 2'b00;
 
-    if (bc_data_ready_i && ~buffer_empty[read_buffer_id_q]) begin
+    if (bc_ready_i && ~buffer_empty[read_buffer_id_q]) begin
       buffer_pop[read_buffer_id_q] = 1'b1;
-      /* bc_data_valid_d              = 1'b1; */
+      /* bc_valid_d              = 1'b1; */
     end
 
-    if (bc_data_invalidate_i) begin
+    if (bc_invalidate_i) begin
       buffer_flush[read_buffer_id_q] = 1'b1;
       read_buffer_id_d               = ~read_buffer_id_q;
     end
@@ -127,11 +127,11 @@ module bc_buffer import ara_pkg::*; import rvv_pkg::*; #(
     if (!rst_ni) begin
       write_buffer_id_q <= 1'b0;
       read_buffer_id_q  <= 1'b0;
-      // bc_data_valid_q   <= 1'b0;
+      // bc_valid_q   <= 1'b0;
     end else begin
       write_buffer_id_q <= write_buffer_id_d;
       read_buffer_id_q  <= read_buffer_id_d;
-      /* bc_data_valid_q   <= bc_data_valid_d; */
+      /* bc_valid_q   <= bc_valid_d; */
     end
   end
 

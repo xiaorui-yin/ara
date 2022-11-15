@@ -86,11 +86,11 @@ module lane import ara_pkg::*; import rvv_pkg::*; #(
     // Broadcast data path
     input  elen_t                                          bc_data_i,
     output elen_t                                          bc_data_o,
-    input  logic                                           bc_data_valid_i,
-    output logic                                           bc_data_valid_o,
+    input  logic                                           bc_valid_i,
+    output logic                                           bc_valid_o,
     // First lane only, to VMFPU
-    output logic                                           bc_data_ready_o,
-    output logic                                           bc_data_invalidate_o,
+    output logic                                           bc_ready_o,
+    output logic                                           bc_invalidate_o,
     // Interface between the Mask unit and the VFUs
     input  strb_t                                          mask_i,
     input  logic                                           mask_valid_i,
@@ -407,6 +407,11 @@ module lane import ara_pkg::*; import rvv_pkg::*; #(
     .mfpu_operand_i       (mfpu_operand                           ),
     .mfpu_operand_valid_i (mfpu_operand_valid                     ),
     .mfpu_operand_ready_o (mfpu_operand_ready                     ),
+    // Broadcast data
+    .bc_data_i            (bc_data_i                              ),
+    .bc_valid_i           (bc_valid_i                             ),
+    .bc_ready_o           (bc_ready_o                             ),
+    .bc_invalidate_o      (bc_invalidate_o                        ),
     // Interface with the Mask unit
     .mask_operand_o       (mask_operand_o[2 +: NrMaskFUnits]      ),
     .mask_operand_valid_o (mask_operand_valid_o[2 +: NrMaskFUnits]),
@@ -452,11 +457,11 @@ module lane import ara_pkg::*; import rvv_pkg::*; #(
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
-      bc_data_o       <= '0;
-      bc_data_valid_o <= 1'b0;
+      bc_data_o  <= '0;
+      bc_valid_o <= 1'b0;
     end else begin
-      bc_data_o       <= bc_data_i;
-      bc_data_valid_o <= bc_data_valid_i;
+      bc_data_o  <= bc_data_i;
+      bc_valid_o <= bc_valid_i;
     end
   end
 
