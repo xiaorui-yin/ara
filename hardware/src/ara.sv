@@ -444,7 +444,7 @@ module ara import ara_pkg::*; #(
     ldu_vrf_result_wdata    = '0;
     ldu_vrf_result_be       = '0;
     ldu_result_gnt          = '0;
-    ldu_bc_result_final_gnt = '0;
+    ldu_result_final_gnt    = '0;
 
     if (ldu_result_sel == 1'b1) begin
       // load data to the broadcast buffer
@@ -455,7 +455,7 @@ module ara import ara_pkg::*; #(
       // ldu_bc_result_be        = ldu_result_be;
 
       ldu_result_gnt          = ldu_bc_result_gnt;
-      ldu_bc_result_final_gnt = ldu_bc_result_final_gnt;
+      ldu_result_final_gnt    = ldu_bc_result_final_gnt;
     end else begin
       // load data to VRF
       ldu_vrf_result_req      = ldu_result_req;
@@ -465,7 +465,7 @@ module ara import ara_pkg::*; #(
       ldu_vrf_result_be       = ldu_result_be;
 
       ldu_result_gnt          = ldu_vrf_result_gnt;
-      ldu_bc_result_final_gnt = ldu_vrf_result_final_gnt;
+      ldu_result_final_gnt    = ldu_vrf_result_final_gnt;
     end
   end
 

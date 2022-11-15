@@ -263,7 +263,7 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
         end else begin
           addrgen_req = '{
             addr    : pe_req_q.scalar_op,
-            len     : (pe_req_q.op == VSSE && pe_req_q.bl != 0) ?
+            len     : ((pe_req_q.op == VSSE && pe_req_q.bl != 0) || pe_req_q.op == VLEBC) ?
                       pe_req_q.bl : pe_req_q.vl,
             stride  : pe_req_q.stride,
             vew     : pe_req_q.vtype.vsew,

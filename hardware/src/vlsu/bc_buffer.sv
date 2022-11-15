@@ -46,7 +46,7 @@ module bc_buffer import ara_pkg::*; import rvv_pkg::*; #(
       .DEPTH(MAX_BLEN),
       .WR_DATA_WIDTH(ELEN * NrLanes),
       .RD_DATA_WIDTH(ELEN)
-    ) i_bc_buffer (
+    ) i_re_readable_fifo (
       .clk_i,
       .rst_ni,
       .flush_i        (buffer_flush[i]         ),
