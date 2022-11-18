@@ -264,8 +264,9 @@ module ara import ara_pkg::*; #(
   elen_t     [NrLanes-1:0]                     bc_lane_data_out;
   logic      [NrLanes-1:0]                     bc_lane_valid_in;
   logic      [NrLanes-1:0]                     bc_lane_valid_out;
+  logic      [NrLanes-1:0]                     bc_lane_ready_in;
+  logic      [NrLanes-1:0]                     bc_lane_ready_out;
   // First lane only, to VMFPU
-  logic      [NrLanes-1:0]                     bc_lane_ready;
   logic      [NrLanes-1:0]                     bc_lane_invalidate;
 
   for (genvar lane = 0; lane < NrLanes; lane++) begin: gen_lanes
@@ -338,21 +339,28 @@ module ara import ara_pkg::*; #(
       .bc_data_o                       (bc_lane_data_out[lane]              ),
       .bc_valid_i                      (bc_lane_valid_in[lane]              ),
       .bc_valid_o                      (bc_lane_valid_out[lane]             ),
-      .bc_ready_o                      (bc_lane_ready[lane]                 ),
+      .bc_ready_i                      (bc_lane_ready_in[lane]              ),
+      .bc_ready_o                      (bc_lane_ready_out[lane]             ),
       .bc_invalidate_o                 (bc_lane_invalidate[lane]            )
     );
 
-    if (lane == 0) begin: gen_bc_path_zero
+    if (lane == 0) begin: gen_bc_path_first_lane
       // The first lane should be connected to the broadcast unit, and is
       // resposible for data invalidating
       assign bc_lane_data_in[0]     = bc_data;
       assign bc_lane_valid_in[0]    = bc_valid;
-      assign bc_ready               = bc_lane_ready[0];
+      assign bc_ready_o             = bc_lane_ready_out[0];
+      assign bc_lane_ready_in[0]    = bc_lane_ready_out[1];
       assign bc_invalidate          = bc_lane_invalidate[0];
-    end else begin: gen_bc_path_nonzero
+    end else if (lane == NrLanes - 1) begin: gen_bc_path_last_lane
       // All other lanes receives data from the pervous lane
       assign bc_lane_data_in[lane]  = bc_lane_data_out[lane - 1];
       assign bc_lane_valid_in[lane] = bc_lane_valid_out[lane - 1];
+      assign bc_lane_ready_in[lane] = 1'b1;
+    end else begin: gen_bc_path_others
+      assign bc_lane_data_in[lane]  = bc_lane_data_out[lane - 1];
+      assign bc_lane_valid_in[lane] = bc_lane_valid_out[lane - 1];
+      assign bc_lane_ready_in[lane] = bc_lane_ready_out[lane + 1];
     end
   end: gen_lanes
 

@@ -378,7 +378,9 @@ module vldu import ara_pkg::*; import rvv_pkg::*; #(
         result_queue_valid_d[result_queue_read_pnt_q][lane] = 1'b0;
         result_queue_d[result_queue_read_pnt_q][lane]       = '0;
         // Reset the final gnt vector since we are now waiting for another final gnt
-        result_final_gnt_d[lane] = 1'b0;
+        // FIXME
+        if (~(vinsn_queue_q.vinsn[vinsn_queue_q.commit_pnt].op == VLEBC))
+          result_final_gnt_d[lane] = 1'b0;
       end
     end: result_write
 

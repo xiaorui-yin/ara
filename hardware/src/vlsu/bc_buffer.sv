@@ -43,7 +43,7 @@ module bc_buffer import ara_pkg::*; import rvv_pkg::*; #(
 
   for (genvar i = 0; i < 2; i++) begin: gen_re_readable_buffer
     re_readable_fifo #(
-      .DEPTH(MAX_BLEN),
+      .DEPTH(MAX_BLEN/2), // TODO: scale to the read data bus
       .WR_DATA_WIDTH(ELEN * NrLanes),
       .RD_DATA_WIDTH(ELEN)
     ) i_re_readable_fifo (
@@ -105,6 +105,7 @@ module bc_buffer import ara_pkg::*; import rvv_pkg::*; #(
 
   /* assign bc_valid_o = bc_valid_q; */
   assign bc_valid_o = ~buffer_empty[read_buffer_id_q];
+  assign bc_data_o  = buffer_dout[read_buffer_id_q];
 
   always_comb begin
     read_buffer_id_d = read_buffer_id_q;

@@ -263,7 +263,7 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
         end else begin
           addrgen_req = '{
             addr    : pe_req_q.scalar_op,
-            len     : ((pe_req_q.op == VSSE && pe_req_q.bl != 0) || pe_req_q.op == VLEBC) ?
+            len     : (pe_req_q.op == VLEBC) ?
                       pe_req_q.bl : pe_req_q.vl,
             stride  : pe_req_q.stride,
             vew     : pe_req_q.vtype.vsew,
@@ -677,7 +677,7 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
               else begin
                 axi_aw_o = '{
                   addr   : axi_addrgen_q.is_bc ?
-                           axi_addrgen_q.addr : bc_addr_q,
+                           bc_addr_q : axi_addrgen_q.addr,
                   len    : 0,
                   size   : axi_addrgen_q.vew,
                   cache  : CACHE_MODIFIABLE,
@@ -690,7 +690,7 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
               // Send this request to the load/store units
               axi_addrgen_queue = '{
                 addr   : axi_addrgen_q.is_bc ?
-                         axi_addrgen_q.addr : bc_addr_q,
+                         bc_addr_q : axi_addrgen_q.addr,
                 size   : axi_addrgen_q.vew,
                 len    : 0,
                 is_load: axi_addrgen_q.is_load
@@ -702,7 +702,7 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
               // Calculate the addresses for the next iteration, adding the correct stride
               if (axi_addrgen_q.is_bc) begin
                 bc_addr_cnt_d = bc_addr_cnt_q + 1;
-                if (bc_addr_cnt_d == NrLanes) begin
+                if (bc_addr_cnt_q == NrLanes - 1) begin
                   bc_addr_cnt_d      = '0;
                   // Increment base address by one element size
                   axi_addrgen_d.addr = axi_addrgen_q.addr + 4; // TODO: 32-float only

@@ -93,12 +93,11 @@ module re_readable_fifo #(
               // un-gate the clock, we want to write something
               gate_clock = 1'b0;
               // increment the write counter
-              if (write_pointer_q == FifoDepth[ADDR_DEPTH-1:0] - 1) begin
+              write_pointer_n = write_pointer_q + RATIO;
+              if (write_pointer_n == FifoDepth[ADDR_DEPTH-1:0]) begin
                   write_pointer_n = '0;
                   load_complete_d = 1'b1;
                   load_finished_o = 1'b1;
-              end else begin
-                  write_pointer_n = write_pointer_q + RATIO;
               end
 
               // increment the overall counter
