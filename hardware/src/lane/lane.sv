@@ -356,6 +356,10 @@ module lane import ara_pkg::*; import rvv_pkg::*; #(
   logic sldu_alu_req_valid_o, sldu_mfpu_req_valid_o;
   logic sldu_alu_ready, sldu_mfpu_ready;
 
+  // Broadcast data
+  elen_t bc_vmfpu_data;
+  logic  bc_vmfpu_valid, bc_vmfpu_ready;
+
   logic bc_ready;
 
   vector_fus_stage #(
@@ -411,9 +415,9 @@ module lane import ara_pkg::*; import rvv_pkg::*; #(
     .mfpu_operand_valid_i (mfpu_operand_valid                     ),
     .mfpu_operand_ready_o (mfpu_operand_ready                     ),
     // Broadcast data
-    .bc_data_i            (bc_data_i                              ),
-    .bc_valid_i           (bc_valid_i                             ),
-    .bc_ready_o           (bc_ready                               ),
+    .bc_data_i            (bc_vmfpu_data                          ),
+    .bc_valid_i           (bc_vmfpu_valid                         ),
+    .bc_ready_o           (bc_vmfpu_ready                         ),
     .bc_invalidate_o      (bc_invalidate_o                        ),
     // Interface with the Mask unit
     .mask_operand_o       (mask_operand_o[2 +: NrMaskFUnits]      ),
@@ -457,36 +461,51 @@ module lane import ara_pkg::*; import rvv_pkg::*; #(
   /*************************
   *   Broadcast Data FF    *
   *************************/
-  logic  bc_valid_d;
-  elen_t bc_data_d;
+  /* logic  bc_valid_d; */
+  /* elen_t bc_data_d; */
 
-  // TODO
-  assign bc_ready_o = bc_ready_i & bc_ready;
+  /* // TODO */
+  /* assign bc_ready_o = bc_ready_i & bc_ready; */
 
-  always_ff @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni) begin
-      bc_data_o  <= '0;
-      bc_valid_o <= 1'b0;
-    end else begin
-      bc_data_o  <= bc_data_d;
-      bc_valid_o <= bc_valid_d;
-    end
-  end
+  /* always_ff @(posedge clk_i or negedge rst_ni) begin */
+  /*   if (!rst_ni) begin */
+  /*     bc_data_o  <= '0; */
+  /*     bc_valid_o <= 1'b0; */
+  /*   end else begin */
+  /*     bc_data_o  <= bc_data_d; */
+  /*     bc_valid_o <= bc_valid_d; */
+  /*   end */
+  /* end */
 
-  always_comb begin
-    if (lane_id_i == '0) begin
-      bc_valid_d = 1'b0;
-      bc_data_d  = '0;
+  /* always_comb begin */
+  /*   if (lane_id_i == '0) begin */
+  /*     bc_valid_d = 1'b0; */
+  /*     bc_data_d  = '0; */
 
-      if (bc_valid_i && bc_ready_o) begin
-        bc_valid_d = 1'b1;
-        bc_data_d  = bc_data_i;
-      end
-    end else begin
-      bc_valid_d = bc_valid_i;
-      bc_data_d  = bc_data_i;
-    end
-  end
+  /*     if (bc_valid_i && bc_ready_o) begin */
+  /*       bc_valid_d = 1'b1; */
+  /*       bc_data_d  = bc_data_i; */
+  /*     end */
+  /*   end else begin */
+  /*     bc_valid_d = bc_valid_i; */
+  /*     bc_data_d  = bc_data_i; */
+  /*   end */
+  /* end */
+
+  bc_operand_queue
+  i_bc_operand_queue (
+    .clk_i            (clk_i            ),
+    .rst_ni           (rst_ni           ),
+    .bc_ready_o       (bc_ready_o       ),
+    .bc_data_i        (bc_data_i        ),
+    .bc_valid_i       (bc_valid_i       ),
+    .bc_ready_i       (bc_ready_i       ),
+    .bc_data_o        (bc_data_o        ),
+    .bc_valid_o       (bc_valid_o       ),
+    .bc_vmfpu_ready_i (bc_vmfpu_ready   ),
+    .bc_vmfpu_data_o  (bc_vmfpu_data    ),
+    .bc_vmfpu_valid_o (bc_vmfpu_valid   )
+  );
 
   //////////////////
   //  Assertions  //

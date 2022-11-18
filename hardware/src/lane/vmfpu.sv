@@ -50,8 +50,8 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
     // Interface with the mini Slide Unit
     input  elen_t                        bc_data_i,
     input  logic                         bc_valid_i,
-    // First lane only
     output logic                         bc_ready_o,
+    // First lane only
     output logic                         bc_invalidate_o, // lane 0
     // Interface with the Mask unit
     output elen_t                        mask_operand_o,
@@ -1766,8 +1766,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
         operands_valid = mfpu_operand_valid_i[1] &&
                          (~vinsn_issue_q.use_vd_op || mfpu_operand_valid_i[2]) &&
                          bc_valid_i;
-        bc_ready_o = mfpu_operand_valid_i[1] && (~vinsn_issue_q.use_vd_op || mfpu_operand_valid_i[2]) && vfpu_in_ready;
-        
+
         if (operands_valid && vinsn_issue_valid) begin
           vfpu_in_valid = 1'b1;
 
@@ -1783,7 +1782,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
             mfpu_operand_ready_o[0] = 1'b0;
             mfpu_operand_ready_o[1] = 1'b0;
             mfpu_operand_ready_o[2] = vinsn_issue_q.use_vd_op;
-            // if (lane_id_i == '0) bc_ready_o = 1'b1; // request for the broadcast data
+            bc_ready_o = 1'b1;
 
             if (bc_issue_cnt_d == vinsn_issue_q.bl) begin
               // Process only one element at a time

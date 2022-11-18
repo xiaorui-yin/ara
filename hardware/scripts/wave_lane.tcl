@@ -37,4 +37,7 @@ add wave -noupdate -group Ara -group Lane[$1] -group vmfpu -group simd_vdiv -gro
 add wave -noupdate -group Ara -group Lane[$1] -group vmfpu -group fpnew /ara_tb/dut/i_ara_soc/i_system/i_ara/gen_lanes[$1]/i_lane/i_vfus/i_vmfpu/fpu_gen/i_fpnew_bulk/*
 add wave -noupdate -group Ara -group Lane[$1] -group vmfpu /ara_tb/dut/i_ara_soc/i_system/i_ara/gen_lanes[$1]/i_lane/i_vfus/i_vmfpu/*
 
+add wave -noupdate -group Ara -group Lane[$1] -group bc_operand_queue /ara_tb/dut/i_ara_soc/i_system/i_ara/gen_lanes[$1]/i_lane/i_bc_operand_queue/*
+add wave -noupdate -group Ara -group Lane[$1] -group bc_operand_queue -group bc_spill_register /ara_tb/dut/i_ara_soc/i_system/i_ara/gen_lanes[$1]/i_lane/i_bc_operand_queue/i_bc_spill_register/*
+
 add wave -noupdate -group Ara -group Lane[$1] /ara_tb/dut/i_ara_soc/i_system/i_ara/gen_lanes[$1]/i_lane/*

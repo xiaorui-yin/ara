@@ -52,6 +52,7 @@ sources:
     - hardware/src/lane/vmfpu.sv
     - hardware/src/vlsu/vlsu.sv
     - hardware/src/vlsu/bc_buffer.sv
+    - hardware/src/lane/bc_operand_queue.sv
     # Level 3
     - hardware/src/lane/vector_fus_stage.sv
     # Level 4
