@@ -90,7 +90,7 @@ module lane import ara_pkg::*; import rvv_pkg::*; #(
     output logic                                           bc_valid_o,
     input  logic                                           bc_ready_i,
     output logic                                           bc_ready_o,
-    // First lane only, to VMFPU
+    // First lane only
     output logic                                           bc_invalidate_o,
     // Interface between the Mask unit and the VFUs
     input  strb_t                                          mask_i,
@@ -360,8 +360,6 @@ module lane import ara_pkg::*; import rvv_pkg::*; #(
   elen_t bc_vmfpu_data;
   logic  bc_vmfpu_valid, bc_vmfpu_ready;
 
-  logic bc_ready;
-
   vector_fus_stage #(
     .NrLanes   (NrLanes   ),
     .FPUSupport(FPUSupport),
@@ -461,36 +459,6 @@ module lane import ara_pkg::*; import rvv_pkg::*; #(
   /*************************
   *   Broadcast Data FF    *
   *************************/
-  /* logic  bc_valid_d; */
-  /* elen_t bc_data_d; */
-
-  /* // TODO */
-  /* assign bc_ready_o = bc_ready_i & bc_ready; */
-
-  /* always_ff @(posedge clk_i or negedge rst_ni) begin */
-  /*   if (!rst_ni) begin */
-  /*     bc_data_o  <= '0; */
-  /*     bc_valid_o <= 1'b0; */
-  /*   end else begin */
-  /*     bc_data_o  <= bc_data_d; */
-  /*     bc_valid_o <= bc_valid_d; */
-  /*   end */
-  /* end */
-
-  /* always_comb begin */
-  /*   if (lane_id_i == '0) begin */
-  /*     bc_valid_d = 1'b0; */
-  /*     bc_data_d  = '0; */
-
-  /*     if (bc_valid_i && bc_ready_o) begin */
-  /*       bc_valid_d = 1'b1; */
-  /*       bc_data_d  = bc_data_i; */
-  /*     end */
-  /*   end else begin */
-  /*     bc_valid_d = bc_valid_i; */
-  /*     bc_data_d  = bc_data_i; */
-  /*   end */
-  /* end */
 
   bc_operand_queue
   i_bc_operand_queue (

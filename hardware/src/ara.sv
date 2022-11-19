@@ -204,16 +204,14 @@ module ara import ara_pkg::*; #(
     .rst_ni                   (rst_ni                        ),
     // Interface with the load unit
     .ldu_result_req_i         (ldu_bc_result_req             ),
-    // .ldu_result_addr_i        (ldu_bc_result_addr            ),
-    // .ldu_result_id_i          (ldu_bc_result_id              ),
     .ldu_result_wdata_i       (ldu_bc_result_wdata           ),
-    // .ldu_result_be_i          (ldu_bc_result_be              ),
     .ldu_result_gnt_o         (ldu_bc_result_gnt             ),
     .ldu_result_final_gnt_o   (ldu_bc_result_final_gnt       ),
-    .bc_ready_i          (bc_ready                 ),
+    // Interface with the first lane
+    .bc_ready_i               (bc_ready                      ),
     .bc_data_o                (bc_data                       ),
-    .bc_valid_o          (bc_valid                 ),
-    .bc_invalidate_i     (bc_invalidate            )
+    .bc_valid_o               (bc_valid                      ),
+    .bc_invalidate_i          (bc_invalidate                 )
   );
 
   /////////////
@@ -349,7 +347,7 @@ module ara import ara_pkg::*; #(
       // resposible for data invalidating
       assign bc_lane_data_in[0]     = bc_data;
       assign bc_lane_valid_in[0]    = bc_valid;
-      assign bc_ready_o             = bc_lane_ready_out[0];
+      assign bc_ready               = bc_lane_ready_out[0];
       assign bc_lane_ready_in[0]    = bc_lane_ready_out[1];
       assign bc_invalidate          = bc_lane_invalidate[0];
     end else if (lane == NrLanes - 1) begin: gen_bc_path_last_lane
