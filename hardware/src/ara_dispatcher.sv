@@ -2919,6 +2919,15 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
           end
         end
       endcase
+
+      if (ara_req_d.op == VFBMACC) begin
+        for (int i = 0; i < 32; i++) begin
+          if (i > ara_req_d.vd && i - ara_req_d.vd < ara_req_d.vl / NrLanes) begin
+            eew_d[i]       = ara_req_d.vtype.vsew;
+            eew_valid_d[i] = 1'b1;
+          end
+        end
+      end
     end
 
     // Any valid non-config instruction is a NOP if vl == 0, with some exceptions,

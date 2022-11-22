@@ -1808,6 +1808,8 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
                 if (vinsn_queue_d.issue_cnt != 0) issue_cnt_d =
                   vinsn_queue_q.vinsn[vinsn_queue_d.issue_pnt].vl;
 
+                op_a_element_pnt_d = '0;
+
                 // Tell the buffer to prepare new data
                 if (lane_id_i == '0) bc_invalidate_d = 1'b1; // invalidate the buffer
               end
@@ -1906,6 +1908,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
         bc_commit_cnt_d = bc_commit_cnt_q + commit_element_cnt;
         if (bc_commit_cnt_d == vinsn_commit.bl) begin
           commit_cnt_d = commit_cnt_q - 1;
+          bc_commit_cnt_d = '0;
         end
       end
     end

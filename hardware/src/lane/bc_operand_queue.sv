@@ -18,6 +18,8 @@ module bc_operand_queue import ara_pkg::*; (
   logic  bc_op_buffer_push, bc_op_buffer_pop;
   logic  bc_op_buffer_full, bc_op_buffer_empty;
 
+  logic data_used_d, data_used_q;
+
   fifo_v3 #(
     .DEPTH(2     ),
     .dtype(elen_t)
@@ -36,7 +38,7 @@ module bc_operand_queue import ara_pkg::*; (
   );
 
   assign bc_vmfpu_data_o = bc_data_i;
-  assign bc_vmfpu_valid_o = bc_valid_i;
+  //assign bc_vmfpu_valid_o = bc_valid_i;
 
   assign bc_valid_o = ~bc_op_buffer_empty;
 
@@ -44,12 +46,43 @@ module bc_operand_queue import ara_pkg::*; (
     bc_ready_o = 1'b0;
     bc_op_buffer_push = 1'b0;
     bc_op_buffer_pop = 1'b0;
-    if (bc_valid_i && ~bc_op_buffer_full && bc_vmfpu_ready_i) begin
-      bc_ready_o = 1'b1;
-      bc_op_buffer_push = 1'b1;
+
+    bc_vmfpu_valid_o = bc_valid_i;
+
+    data_used_d = data_used_q;
+
+    if (bc_valid_i && bc_vmfpu_ready_i) begin
+      if (~bc_op_buffer_full) begin
+        // Ackownledge the data
+        bc_ready_o = 1'b1;
+        bc_op_buffer_push = 1'b1;
+      end else begin
+        // The next lane is not ready
+        // Mark this data as used
+        data_used_d = 1'b1;
+      end
+    end
+
+    if (data_used_q) begin
+      bc_vmfpu_valid_o = 1'b0;
+      // Clear if the old data is pushed
+      if (~bc_op_buffer_full) begin
+        data_used_d = 1'b0;
+        bc_ready_o = 1'b1;
+        bc_op_buffer_push = 1'b1;
+      end
     end
 
     if (~bc_op_buffer_empty && bc_ready_i)
       bc_op_buffer_pop = 1'b1;
   end
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if(~rst_ni) begin
+      data_used_q <= 1'b0;
+    end else begin
+      data_used_q <= data_used_d;
+    end
+  end
+
 endmodule : bc_operand_queue

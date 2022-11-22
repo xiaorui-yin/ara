@@ -440,7 +440,19 @@ module ara_sequencer import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::i
               pe_req_valid_d = 1'b1;
 
               // Mark that this vector instruction is writing to vector vd
-              if (ara_req_i.use_vd) write_list_d[ara_req_i.vd] = '{vid: vinsn_id_n, valid: 1'b1};
+              if (ara_req_i.use_vd) begin
+                // TODO VFBMACC
+                if (ara_req_i.op == VFBMACC) begin
+                  for (int i=0; i<32; ++i) begin
+                    if ((i >= ara_req_i.vd) && (i - ara_req_i.vd < ara_req_i.vl / NrLanes)) begin
+                      write_list_d[i] = '{vid: vinsn_id_n, valid: 1'b1};
+                    end
+                  end
+                end else begin
+                  write_list_d[ara_req_i.vd] = '{vid: vinsn_id_n, valid: 1'b1};
+                end
+                // write_list_d[ara_req_i.vd] = '{vid: vinsn_id_n, valid: 1'b1};
+              end
 
               // Mark that this loop is reading vs
               if (ara_req_i.use_vs1) read_list_d[ara_req_i.vs1] = '{vid: vinsn_id_n, valid: 1'b1};

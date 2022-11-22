@@ -101,21 +101,17 @@ module bc_buffer import ara_pkg::*; import rvv_pkg::*; #(
   // Buffer Read Control
   // ==============================================================
 
-  /* logic bc_valid_d, bc_valid_q; */
-
-  /* assign bc_valid_o = bc_valid_q; */
-  assign bc_valid_o = ~buffer_empty[read_buffer_id_q];
+  // bc_invalidate_i is buffered in vmfpu
+  assign bc_valid_o = ~buffer_empty[read_buffer_id_q] && ~bc_invalidate_i;
   assign bc_data_o  = buffer_dout[read_buffer_id_q];
 
   always_comb begin
     read_buffer_id_d = read_buffer_id_q;
     buffer_pop       = 2'b00;
-    /* bc_valid_d  = bc_valid_q; */
     buffer_flush     = 2'b00;
 
     if (bc_ready_i && ~buffer_empty[read_buffer_id_q]) begin
       buffer_pop[read_buffer_id_q] = 1'b1;
-      /* bc_valid_d              = 1'b1; */
     end
 
     if (bc_invalidate_i) begin
@@ -128,11 +124,9 @@ module bc_buffer import ara_pkg::*; import rvv_pkg::*; #(
     if (!rst_ni) begin
       write_buffer_id_q <= 1'b0;
       read_buffer_id_q  <= 1'b0;
-      // bc_valid_q   <= 1'b0;
     end else begin
       write_buffer_id_q <= write_buffer_id_d;
       read_buffer_id_q  <= read_buffer_id_d;
-      /* bc_valid_q   <= bc_valid_d; */
     end
   end
 
