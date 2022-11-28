@@ -144,23 +144,6 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
     .data_o (idx_final_addr_q)
   );
 
-  /////////////////////////////
-  // Broadcast strided store //
-  /////////////////////////////
-
-  logic [$clog2(NrLanes)-1:0] bc_addr_cnt_d, bc_addr_cnt_q;
-  axi_addr_t  bc_addr_d, bc_addr_q;
-
-  always_ff @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni) begin
-      bc_addr_cnt_q <= '0;
-      bc_addr_q     <= '0;
-    end else begin
-      bc_addr_cnt_q <= bc_addr_cnt_d;
-      bc_addr_q     <= bc_addr_d;
-    end
-  end
-
 
   //////////////////////////
   //  Address generation  //
@@ -491,18 +474,11 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
     axi_aw_o       = '0;
     axi_aw_valid_o = 1'b0;
 
-    bc_addr_d     = bc_addr_q;
-    bc_addr_cnt_d = bc_addr_cnt_q;
-
     case (axi_addrgen_state_q)
       AXI_ADDRGEN_IDLE: begin
         if (addrgen_req_valid) begin
           axi_addrgen_d       = addrgen_req;
           axi_addrgen_state_d = core_st_pending_i ? AXI_ADDRGEN_WAITING : AXI_ADDRGEN_REQUESTING;
-
-          // Broadcast strided store initialization
-          bc_addr_cnt_d = '0;
-          bc_addr_d     = addrgen_req.addr;
 
           // In case of a misaligned store, reduce the effective width of the AXI transaction,
           // since the store unit does not support misalignments between the AXI bus and the lanes
