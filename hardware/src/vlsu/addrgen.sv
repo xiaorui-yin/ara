@@ -684,6 +684,14 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
               //  Strided access //
               /////////////////////
 
+              // If op == VSSE and bl != 0
+              // Store NR_LANES 32-bit data in burst mode
+              // Then increase the base address by the stride size
+              // Example, 4-lanes, base_addr = 100, stride = 128
+              // addr = 100, d0, d1, d2, d3
+              // addr = 228, d4, d5, d6, d7
+              // addr = 356, d8, d9, d10, d11
+
               // AR Channel
               if (axi_addrgen_q.is_load) begin
                 axi_ar_o = '{
@@ -699,10 +707,9 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
               // AW Channel
               else begin
                 axi_aw_o = '{
-                  addr   : axi_addrgen_q.is_bc ?
-                           bc_addr_q : axi_addrgen_q.addr,
+                  addr   : axi_addrgen_d.addr,
                   len    : 0,
-                  size   : axi_addrgen_q.vew,
+                  size   : axi_addrgen_q.is_bc ? eff_axi_dw_log_q : axi_addrgen_q.vew,
                   cache  : CACHE_MODIFIABLE,
                   burst  : BURST_INCR,
                   default: '0
@@ -712,28 +719,17 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
 
               // Send this request to the load/store units
               axi_addrgen_queue = '{
-                addr   : axi_addrgen_q.is_bc ?
-                         bc_addr_q : axi_addrgen_q.addr,
-                size   : axi_addrgen_q.vew,
+                addr   : axi_addrgen_d.addr,
+                size   : axi_addrgen_q.is_bc ? eff_axi_dw_log_q : axi_addrgen_q.vew,
                 len    : 0,
                 is_load: axi_addrgen_q.is_load
               };
               axi_addrgen_queue_push = 1'b1;
 
               // Account for the requested operands
-              axi_addrgen_d.len  = axi_addrgen_q.len - 1;
+              axi_addrgen_d.len  = axi_addrgen_q.len - (axi_addrgen_q.is_bc ? NrLanes : 1);
               // Calculate the addresses for the next iteration, adding the correct stride
-              if (axi_addrgen_q.is_bc) begin
-                bc_addr_cnt_d = bc_addr_cnt_q + 1;
-                if (bc_addr_cnt_q == NrLanes - 1) begin
-                  bc_addr_cnt_d      = '0;
-                  // Increment base address by one element size
-                  axi_addrgen_d.addr = axi_addrgen_q.addr + axi_addrgen_q.stride;//4; // TODO: 32-float only
-                  bc_addr_d          = axi_addrgen_d.addr;
-                end else
-                  bc_addr_d          = bc_addr_q + 4; //axi_addrgen_q.stride;
-              end else
-                axi_addrgen_d.addr = axi_addrgen_q.addr + axi_addrgen_q.stride;
+              axi_addrgen_d.addr = axi_addrgen_q.addr + axi_addrgen_q.stride;
 
               // Finished generating AXI requests
               if (axi_addrgen_d.len == 0) begin
