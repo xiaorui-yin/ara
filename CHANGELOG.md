@@ -44,6 +44,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
  - Reshuffle the source registers vs when an in-lane operation operates on element with vsew != eew_q[vs]
  - Fix the data target for `.spike` app compilations
  - `make -C apps clean` performs a deeper clean of the temporary object files
+ - Fix riscv-isa-sim patch and bump pointer to riscv-isa-sim submodule
+ - Fix VALU issue_counter initialization for mask logical operations
+ - `vslideup` instructions that have `stride >= vl_q` have no effect
+ - `benchmark.sh` keeps into account the number of lanes during program compilation
+ - Fix typo in `performance.py` related to `fconv2d`
+ - Fix lmul checks on `vs1` for conversion instructions
+ - Fix `eew_vs1` for widening instructions
+ - Fix cleaning of the accumulator after partial reduction in `valu`
+ - De-parametrize FFT on the data-type
+ - New reductions should start only when the previous operation is over
+ - Prevent VMFPU from acknowledging the opqueues when their issue is over
+ - Operand requesters sanitize partial operands during a reduction
+ - Fix load/store-complete signals to CVA6
 
 ### Added
 
@@ -66,6 +79,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
  - Add support for ideal-dispatcher simulation
  - Add compile-time garbage-collection to strip unused functions out and decrease the memory footprint of the binary
  - Add benchmarking capability with the ideal-dispatcher system + performance plotting. The support is limited to simluation with QuestaSim only
+ - Plot jacobi2d performance
+ - Plot dropout performance
+ - Add FFT benchmark and print its performance
+ - Add DWT benchmark and print its performance
+ - Add fp-exp, fp-cos, fp-log benchmarks from rivec bmark suite + print performance
+ - Ideal Dispatcher tracer now supports strided memory operations
+ - Add Softmax benchmark and print its performance
+ - Add [f]dotproduct apps and benchmarks, and plot their performance
+ - Add a specific script to handle [f]dotproduct performance plotting
+ - Add a script to benchmark all the applications together locally
+ - Add HW cycle counter to better measure runtime cycles with short vectors
+ - Add Pathfinder `app` and `benchmark`, and plot its performance
+ - Add Roi-Align `app` and `benchmark`, and plot its performance
 
 ### Changed
 
@@ -87,6 +113,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
  - Increase addrgen queue depth to four, to better hide memory latency
  - The RESHUFFLE state is now iterative and reshuffles all the vector registers that need this operation
  - Performance metrics are now calculated by an external performance.py script, instead of during the program simulation, which just prints out the cycle count
+ - 7x7 kernel 2dconvs now support arbitrary vector lengths
+ - Default con vlen in the config files is now NR_LANES*1024
+ - Optimize jacobi2d in ASM, +align store address
+ - Replace `apps/common/script/datagen.sh` with new input data source-of-truth (`apps/common/default_arguments.mk`) during app compilation
+ - benchmark.sh can now also benchmark just one app at a time via an input argument
+ - Adapt `fdotproduct` to `dotproduct` structure
+ - Pre-calculate next-cycle `aligned_start_address` in `addrgen` for timing reasons
+ - Add `is_reduct` signal to the operand queues, to gate the neutral value filling
 
 ## 2.2.0 - 2021-11-02
 

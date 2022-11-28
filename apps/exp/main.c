@@ -20,9 +20,14 @@
 #include <string.h>
 
 #include "kernel/exp.h"
-#include "printf.h"
 #include "runtime.h"
 #include "util.h"
+
+#ifndef SPIKE
+#include "printf.h"
+#else
+#include <stdio.h>
+#endif
 
 extern size_t N_f64;
 extern double exponents_f64[] __attribute__((aligned(4 * NR_LANES)));
@@ -83,6 +88,8 @@ int main() {
              gold_results_f32[i]);
     }
   }
+  if (!error)
+    printf("Test result: PASS. No errors found.\n");
 #endif
 
   return error;

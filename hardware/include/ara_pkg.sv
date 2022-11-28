@@ -175,9 +175,7 @@ package ara_pkg;
     OpQueueConversionZExt8,
     OpQueueConversionSExt8,
     OpQueueConversionWideFP2,
-    OpQueueIntReductionZExt,
-    OpQueueFloatReductionZExt,
-    OpQueueFloatReductionWideZExt,
+    OpQueueReductionZExt,
     OpQueueAdjustFPCvt
   } opqueue_conversion_e;
   // OpQueueAdjustFPCvt is introduced to support widening FP conversions, to comply with the
@@ -864,8 +862,8 @@ package ara_pkg;
 
   // Differenciate between SLDU and ADDRGEN operands from opqueue
   typedef enum logic {
-    SLDU    = 1'b0,
-    ADDRGEN = 1'b1
+    ALU_SLDU     = 1'b0,
+    MFPU_ADDRGEN = 1'b1
   } target_fu_e;
 
   // This is the interface between the lane's sequencer and the operand request stage, which
@@ -878,6 +876,8 @@ package ara_pkg;
     logic scale_vl; // Rescale vl taking into account the new and old EEW
 
     resize_e cvt_resize;    // Resizing of FP conversions
+
+    logic is_reduct; // Is this a reduction?
 
     rvv_pkg::vew_e eew;        // Effective element width
     opqueue_conversion_e conv; // Type conversion
@@ -902,6 +902,7 @@ package ara_pkg;
     vlen_t vl;                 // Vector length
     opqueue_conversion_e conv; // Type conversion
     logic [1:0] ntr_red;       // Neutral type for reductions
+    logic is_reduct;           // Is this a reduction?
     target_fu_e target_fu;     // Target FU of the opqueue (if it is not clear)
     logic is_bc;               // Broadcast mode
     vlen_t num_vs;             // Number of different registers

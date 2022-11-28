@@ -187,10 +187,13 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
   logic load_zero_vl, store_zero_vl;
   // Do not checks vregs validity against current LMUL
   logic skip_lmul_checks;
+  logic skip_vs1_lmul_checks;
   // Are we decoding?
   logic is_decoding;
   // Is this an in-lane operation?
   logic in_lane_op;
+  // If the vslideup offset is greater than vl_q, the vslideup has no effects
+  logic null_vslideup;
 
   // Pipeline the VLSU's load and store complete signals, for timing reasons
   logic load_complete_q;
@@ -229,7 +232,10 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
     load_zero_vl  = 1'b0;
     store_zero_vl = 1'b0;
 
-    skip_lmul_checks = 1'b0;
+    skip_lmul_checks     = 1'b0;
+    skip_vs1_lmul_checks = 1'b0;
+
+    null_vslideup = 1'b0;
 
     is_decoding = 1'b0;
     in_lane_op  = 1'b0;
@@ -595,16 +601,18 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                   6'b110000: begin
                     ara_req_d.op = ara_pkg::VWREDSUMU;
                     ara_req_d.emul           = next_lmul(vtype_q.vlmul);
+                    ara_req_d.eew_vs1        = vtype_q.vsew.next();
                     ara_req_d.vtype.vsew     = vtype_q.vsew.next();
-                    ara_req_d.conversion_vs1 = OpQueueIntReductionZExt;
+                    ara_req_d.conversion_vs1 = OpQueueReductionZExt;
                     ara_req_d.conversion_vs2 = OpQueueConversionZExt2;
                     ara_req_d.cvt_resize     = CVT_WIDE;
                   end
                   6'b110001: begin
                     ara_req_d.op = ara_pkg::VWREDSUM;
                     ara_req_d.emul           = next_lmul(vtype_q.vlmul);
+                    ara_req_d.eew_vs1        = vtype_q.vsew.next();
                     ara_req_d.vtype.vsew     = vtype_q.vsew.next();
-                    ara_req_d.conversion_vs1 = OpQueueIntReductionZExt;
+                    ara_req_d.conversion_vs1 = OpQueueReductionZExt;
                     ara_req_d.conversion_vs2 = OpQueueConversionSExt2;
                     ara_req_d.cvt_resize     = CVT_WIDE;
                   end
@@ -663,6 +671,9 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                     // will fetch bytes from a vreg with a different eew
                     // i.e., request will need reshuffling
                     ara_req_d.scale_vl      = 1'b1;
+                    // If stride > vl, the vslideup has no effects
+                    if (|ara_req_d.stride[$bits(ara_req_d.stride)-1:$bits(vl_q)] ||
+                      (vlen_t'(ara_req_d.stride) >= vl_q)) null_vslideup = 1'b1;
                   end
                   6'b001111: begin
                     ara_req_d.op            = ara_pkg::VSLIDEDOWN;
@@ -850,6 +861,9 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                     ara_req_d.use_scalar_op = 1'b0;
                     // Request will need reshuffling
                     ara_req_d.scale_vl      = 1'b1;
+                    // If stride > vl, the vslideup has no effects
+                    if (|ara_req_d.stride[$bits(ara_req_d.stride)-1:$bits(vl_q)] ||
+                      (vlen_t'(ara_req_d.stride) >= vl_q)) null_vslideup = 1'b1;
                   end
                   6'b001111: begin
                     ara_req_d.op            = ara_pkg::VSLIDEDOWN;
@@ -1035,42 +1049,42 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                   // value of each operation
                   6'b000000: begin
                     ara_req_d.op             = ara_pkg::VREDSUM;
-                    ara_req_d.conversion_vs1 = OpQueueIntReductionZExt;
+                    ara_req_d.conversion_vs1 = OpQueueReductionZExt;
                     ara_req_d.cvt_resize     = resize_e'(2'b00);
                   end
                   6'b000001: begin
                     ara_req_d.op             = ara_pkg::VREDAND;
-                    ara_req_d.conversion_vs1 = OpQueueIntReductionZExt;
+                    ara_req_d.conversion_vs1 = OpQueueReductionZExt;
                     ara_req_d.cvt_resize     = resize_e'(2'b11);
                   end
                   6'b000010: begin
                     ara_req_d.op             = ara_pkg::VREDOR;
-                    ara_req_d.conversion_vs1 = OpQueueIntReductionZExt;
+                    ara_req_d.conversion_vs1 = OpQueueReductionZExt;
                     ara_req_d.cvt_resize     = resize_e'(2'b00);
                   end
                   6'b000011: begin
                     ara_req_d.op             = ara_pkg::VREDXOR;
-                    ara_req_d.conversion_vs1 = OpQueueIntReductionZExt;
+                    ara_req_d.conversion_vs1 = OpQueueReductionZExt;
                     ara_req_d.cvt_resize     = resize_e'(2'b00);
                   end
                   6'b000100: begin
                     ara_req_d.op             = ara_pkg::VREDMINU;
-                    ara_req_d.conversion_vs1 = OpQueueIntReductionZExt;
+                    ara_req_d.conversion_vs1 = OpQueueReductionZExt;
                     ara_req_d.cvt_resize     = resize_e'(2'b11);
                   end
                   6'b000101: begin
                     ara_req_d.op             = ara_pkg::VREDMIN;
-                    ara_req_d.conversion_vs1 = OpQueueIntReductionZExt;
+                    ara_req_d.conversion_vs1 = OpQueueReductionZExt;
                     ara_req_d.cvt_resize     = resize_e'(2'b01);
                   end
                   6'b000110: begin
                     ara_req_d.op             = ara_pkg::VREDMAXU;
-                    ara_req_d.conversion_vs1 = OpQueueIntReductionZExt;
+                    ara_req_d.conversion_vs1 = OpQueueReductionZExt;
                     ara_req_d.cvt_resize     = resize_e'(2'b00);
                   end
                   6'b000111: begin
                     ara_req_d.op             = ara_pkg::VREDMAX;
-                    ara_req_d.conversion_vs1 = OpQueueIntReductionZExt;
+                    ara_req_d.conversion_vs1 = OpQueueReductionZExt;
                     ara_req_d.cvt_resize     = resize_e'(2'b10);
                   end
                   6'b010000: begin // VWXUNARY0
@@ -1143,7 +1157,8 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                   end
                   6'b010010: begin // VXUNARY0
                     // These instructions do not use vs1
-                    ara_req_d.use_vs1       = 1'b0;
+                    ara_req_d.use_vs1    = 1'b0;
+                    skip_vs1_lmul_checks = 1'b1;
                     // They are always encoded as ADDs with zero.
                     ara_req_d.op            = ara_pkg::VADD;
                     ara_req_d.use_scalar_op = 1'b1;
@@ -1417,6 +1432,9 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                     ara_req_d.eew_vs2 = vtype_q.vsew;
                     // Request will need reshuffling
                     ara_req_d.scale_vl = 1'b1;
+                    // If stride > vl, the vslideup has no effects
+                    if (|ara_req_d.stride[$bits(ara_req_d.stride)-1:$bits(vl_q)] ||
+                      (vlen_t'(ara_req_d.stride) >= vl_q)) null_vslideup = 1'b1;
                   end
                   6'b001111: begin // vslide1down
                     ara_req_d.op      = ara_pkg::VSLIDEDOWN;
@@ -1649,7 +1667,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                     end
                     6'b000001: begin
                       ara_req_d.op             = ara_pkg::VFREDUSUM;
-                      ara_req_d.conversion_vs1 = OpQueueFloatReductionZExt;
+                      ara_req_d.conversion_vs1 = OpQueueReductionZExt;
                       ara_req_d.swap_vs2_vd_op = 1'b1;
                       ara_req_d.cvt_resize     = resize_e'(2'b00);
                     end
@@ -1659,20 +1677,20 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                     end
                     6'b000011: begin
                       ara_req_d.op             = ara_pkg::VFREDOSUM;
-                      ara_req_d.conversion_vs1 = OpQueueFloatReductionZExt;
+                      ara_req_d.conversion_vs1 = OpQueueReductionZExt;
                       ara_req_d.swap_vs2_vd_op = 1'b1;
                       ara_req_d.cvt_resize     = resize_e'(2'b00);
                     end
                     6'b000100: ara_req_d.op = ara_pkg::VFMIN;
                     6'b000101: begin
                       ara_req_d.op             = ara_pkg::VFREDMIN;
-                      ara_req_d.conversion_vs1 = OpQueueFloatReductionZExt;
+                      ara_req_d.conversion_vs1 = OpQueueReductionZExt;
                       ara_req_d.cvt_resize     = resize_e'(2'b01);
                     end
                     6'b000110: ara_req_d.op = ara_pkg::VFMAX;
                     6'b000111: begin
                       ara_req_d.op             = ara_pkg::VFREDMAX;
-                      ara_req_d.conversion_vs1 = OpQueueFloatReductionZExt;
+                      ara_req_d.conversion_vs1 = OpQueueReductionZExt;
                       ara_req_d.cvt_resize     = resize_e'(2'b10);
                     end
                     6'b001000: ara_req_d.op = ara_pkg::VFSGNJ;
@@ -1717,7 +1735,8 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                     6'b011100: ara_req_d.op = ara_pkg::VMFNE;
                     6'b010010: begin // VFUNARY0
                       // These instructions do not use vs1
-                      ara_req_d.use_vs1 = 1'b0;
+                      ara_req_d.use_vs1    = 1'b0;
+                      skip_vs1_lmul_checks = 1'b1;
 
                       case (insn.varith_type.rs1)
                         5'b00000: ara_req_d.op = VFCVTXUF;
@@ -1819,7 +1838,8 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                     end
                     6'b010011: begin // VFUNARY1
                     // These instructions do not use vs1
-                    ara_req_d.use_vs1 = 1'b0;
+                    ara_req_d.use_vs1    = 1'b0;
+                    skip_vs1_lmul_checks = 1'b1;
 
                     unique case (insn.varith_type.rs1)
                       5'b00000: ara_req_d.op = ara_pkg::VFSQRT;
@@ -1888,7 +1908,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                       ara_req_d.swap_vs2_vd_op = 1'b1;
                       ara_req_d.emul           = next_lmul(vtype_q.vlmul);
                       ara_req_d.vtype.vsew     = vtype_q.vsew.next();
-                      ara_req_d.conversion_vs1 = OpQueueFloatReductionWideZExt;
+                      ara_req_d.conversion_vs1 = OpQueueReductionZExt;
                       ara_req_d.conversion_vs2 = OpQueueConversionWideFP2;
                       ara_req_d.eew_vs1        = vtype_q.vsew.next();
                       ara_req_d.cvt_resize     = resize_e'(2'b00);
@@ -1906,7 +1926,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                       ara_req_d.swap_vs2_vd_op = 1'b1;
                       ara_req_d.emul           = next_lmul(vtype_q.vlmul);
                       ara_req_d.vtype.vsew     = vtype_q.vsew.next();
-                      ara_req_d.conversion_vs1 = OpQueueFloatReductionWideZExt;
+                      ara_req_d.conversion_vs1 = OpQueueReductionZExt;
                       ara_req_d.conversion_vs2 = OpQueueConversionWideFP2;
                       ara_req_d.eew_vs1        = vtype_q.vsew.next();
                       ara_req_d.cvt_resize     = resize_e'(2'b00);
@@ -1993,13 +2013,15 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                       LMUL_RSVD: illegal_insn = 1'b1;
                       default:;
                     endcase
-                    unique case (lmul_vs1)
-                      LMUL_2   : if ((insn.varith_type.rs1 & 5'b00001) != 5'b00000) illegal_insn = 1'b1;
-                      LMUL_4   : if ((insn.varith_type.rs1 & 5'b00011) != 5'b00000) illegal_insn = 1'b1;
-                      LMUL_8   : if ((insn.varith_type.rs1 & 5'b00111) != 5'b00000) illegal_insn = 1'b1;
-                      LMUL_RSVD: illegal_insn = 1'b1;
-                      default:;
-                    endcase
+                    if (!skip_vs1_lmul_checks) begin
+                      unique case (lmul_vs1)
+                        LMUL_2   : if ((insn.varith_type.rs1 & 5'b00001) != 5'b00000) illegal_insn = 1'b1;
+                        LMUL_4   : if ((insn.varith_type.rs1 & 5'b00011) != 5'b00000) illegal_insn = 1'b1;
+                        LMUL_8   : if ((insn.varith_type.rs1 & 5'b00111) != 5'b00000) illegal_insn = 1'b1;
+                        LMUL_RSVD: illegal_insn = 1'b1;
+                        default:;
+                      endcase
+                    end
                   end
 
                   // Ara can support 16-bit float, 32-bit float, 64-bit float.
@@ -2065,6 +2087,9 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                     ara_req_d.eew_vs2  = vtype_q.vsew;
                     // Request will need reshuffling
                     ara_req_d.scale_vl = 1'b1;
+                    // If stride > vl, the vslideup has no effects
+                    if (|ara_req_d.stride[$bits(ara_req_d.stride)-1:$bits(vl_q)] ||
+                      (vlen_t'(ara_req_d.stride) >= vl_q)) null_vslideup = 1'b1;
                     end
                     6'b001111: begin // vfslide1down
                       ara_req_d.op     = ara_pkg::VSLIDEDOWN;
@@ -2932,7 +2957,8 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
 
     // Any valid non-config instruction is a NOP if vl == 0, with some exceptions,
     // e.g. whole vector memory operations / whole vector register move
-    if (is_decoding && vl_q == '0 && !is_config && !ignore_zero_vl_check && !acc_resp_o.error) begin
+    if (is_decoding && (vl_q == '0 || null_vslideup) && !is_config &&
+      !ignore_zero_vl_check && !acc_resp_o.error) begin
       // If we are acknowledging a memory operation, we must tell Ariane that the memory
       // operation was resolved (to decrement its pending load/store counter)
       // This can collide with the same signal from the vector load/store unit, so we must
@@ -2943,6 +2969,9 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
       load_zero_vl     = is_vload;
       store_zero_vl    = is_vstore;
     end
+
+    acc_resp_o.load_complete  = load_zero_vl  | load_complete_q;
+    acc_resp_o.store_complete = store_zero_vl | store_complete_q;
   end: p_decoder
 
 endmodule : ara_dispatcher

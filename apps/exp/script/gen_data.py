@@ -39,14 +39,12 @@ def rand_matrix(N, dtype):
 ## SCRIPT ##
 ############
 
-N_f64 = 32
-N_f32 = 32
-# if len(sys.argv) == 2:
-#   N_f64 = int(sys.argv[1])
-#   N_f32 = 2 * N_f64
-# else:
-#   print("Error. Give me one argument: the number of vector elements.")
-#   sys.exit()
+if len(sys.argv) == 2:
+  N_f64 = int(sys.argv[1])
+  N_f32 = 2 * N_f64
+else:
+  print("Error. Give me one argument: the number of vector elements.")
+  sys.exit()
 
 # Vector of samples
 exponents_f64 = rand_matrix(N_f64, np.float64).astype(np.float64)

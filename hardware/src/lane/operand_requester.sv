@@ -341,7 +341,8 @@ module operand_requester import ara_pkg::*; import rvv_pkg::*; #(
               conv     : operand_request_i[requester].conv,
               ntr_red  : operand_request_i[requester].cvt_resize,
               target_fu: operand_request_i[requester].target_fu,
-              is_bc    : operand_request_i[requester].is_bc,
+              is_reduct: operand_request_i[requester].is_reduct,
+	      is_bc    : operand_request_i[requester].is_bc,
               num_vs   : operand_request_i[requester].vl
             };
             // The length should be at least one after the rescaling
@@ -475,7 +476,8 @@ module operand_requester import ara_pkg::*; import rvv_pkg::*; #(
                   conv     : operand_request_i[requester].conv,
                   ntr_red  : operand_request_i[requester].cvt_resize,
                   target_fu: operand_request_i[requester].target_fu,
-                  is_bc    : operand_request_i[requester].is_bc,
+                  is_reduct: operand_request_i[requester].is_reduct,
+		  is_bc    : operand_request_i[requester].is_bc,
                   num_vs   : operand_request_i[requester].vl
                 };
                 operand_queue_cmd_valid_o[requester] = 1'b1;
