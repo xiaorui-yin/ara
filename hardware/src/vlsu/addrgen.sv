@@ -705,10 +705,10 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
                 if (bc_addr_cnt_q == NrLanes - 1) begin
                   bc_addr_cnt_d      = '0;
                   // Increment base address by one element size
-                  axi_addrgen_d.addr = axi_addrgen_q.addr + 4; // TODO: 32-float only
+                  axi_addrgen_d.addr = axi_addrgen_q.addr + axi_addrgen_q.stride;//4; // TODO: 32-float only
                   bc_addr_d          = axi_addrgen_d.addr;
                 end else
-                  bc_addr_d          = bc_addr_q + axi_addrgen_q.stride;
+                  bc_addr_d          = bc_addr_q + 4; //axi_addrgen_q.stride;
               end else
                 axi_addrgen_d.addr = axi_addrgen_q.addr + axi_addrgen_q.stride;
 

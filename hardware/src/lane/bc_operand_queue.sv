@@ -13,6 +13,9 @@ module bc_operand_queue import ara_pkg::*; (
     input  logic                           bc_vmfpu_ready_i,
     output elen_t                          bc_vmfpu_data_o,
     output logic                           bc_vmfpu_valid_o
+    // // First lane only
+    // input  logic                           bc_vmfpu_invalidate_i,
+    // output logic                           bc_invalidate_o
 );
 
   logic  bc_op_buffer_push, bc_op_buffer_pop;
@@ -38,24 +41,43 @@ module bc_operand_queue import ara_pkg::*; (
   );
 
   assign bc_vmfpu_data_o = bc_data_i;
-  //assign bc_vmfpu_valid_o = bc_valid_i;
-
-  assign bc_valid_o = ~bc_op_buffer_empty;
+  assign bc_valid_o      = ~bc_op_buffer_empty;
 
   always_comb begin
     bc_ready_o = 1'b0;
     bc_op_buffer_push = 1'b0;
     bc_op_buffer_pop = 1'b0;
 
-    bc_vmfpu_valid_o = bc_valid_i;
+    bc_vmfpu_valid_o = 1'b0;//bc_valid_i;
 
     data_used_d = data_used_q;
 
-    if (bc_valid_i && bc_vmfpu_ready_i) begin
-      if (~bc_op_buffer_full) begin
+    // if (bc_valid_i && bc_vmfpu_ready_i) begin
+    //   if (~bc_op_buffer_full) begin
+    //     // Ackownledge the data
+    //     bc_ready_o = 1'b1;
+    //     bc_op_buffer_push = 1'b1;
+    //   end else begin
+    //     // The next lane is not ready
+    //     // Mark this data as used
+    //     data_used_d = 1'b1;
+    //   end
+    // end
+    // if (data_used_q) begin
+    //   bc_vmfpu_valid_o = 1'b0;
+    //   // Clear if the old data is pushed
+    //   if (~bc_op_buffer_full) begin
+    //     data_used_d = 1'b0;
+    //     bc_ready_o = 1'b1;
+    //     bc_op_buffer_push = 1'b1;
+    //   end
+    // end
+    if (bc_valid_i && ~bc_op_buffer_full && ~data_used_q) begin
+      bc_vmfpu_valid_o = 1'b1;
+      bc_op_buffer_push = 1'b1;
+      if (bc_vmfpu_ready_i) begin
         // Ackownledge the data
         bc_ready_o = 1'b1;
-        bc_op_buffer_push = 1'b1;
       end else begin
         // The next lane is not ready
         // Mark this data as used
@@ -64,12 +86,11 @@ module bc_operand_queue import ara_pkg::*; (
     end
 
     if (data_used_q) begin
-      bc_vmfpu_valid_o = 1'b0;
+      bc_vmfpu_valid_o = 1'b1;
       // Clear if the old data is pushed
-      if (~bc_op_buffer_full) begin
+      if (bc_vmfpu_ready_i) begin
         data_used_d = 1'b0;
         bc_ready_o = 1'b1;
-        bc_op_buffer_push = 1'b1;
       end
     end
 

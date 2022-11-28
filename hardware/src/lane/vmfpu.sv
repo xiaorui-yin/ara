@@ -597,12 +597,12 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
   vlen_t bc_issue_cnt_d, bc_issue_cnt_q;
   vlen_t bc_process_cnt_d, bc_process_cnt_q;
   vlen_t bc_commit_cnt_d, bc_commit_cnt_q;
-  logic  bc_invalidate_d, bc_invalidate_q;
+  // logic  bc_invalidate_d, bc_invalidate_q;
   logic [4:0] vd_inc_d, vd_inc_q;
 
   logic [1:0] op_a_element_pnt_d, op_a_element_pnt_q;
 
-  assign bc_invalidate_o = bc_invalidate_q;
+  // assign bc_invalidate_o = bc_invalidate_q;
 
   // TODO: other precisions
   function automatic elen_t get_op_a(elen_t operand_a, logic [1:0] op_a_element_pnt, vew_e ew);
@@ -623,14 +623,14 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
       bc_issue_cnt_q   <= '0;
       bc_process_cnt_q <= '0;
       bc_commit_cnt_q  <= '0;
-      bc_invalidate_q  <= 1'b0;
+      // bc_invalidate_q  <= 1'b0;
       vd_inc_q         <= '0;
       op_a_element_pnt_q <= '0;
     end else begin
       bc_issue_cnt_q   <= bc_issue_cnt_d;
       bc_process_cnt_q <= bc_process_cnt_d;
       bc_commit_cnt_q  <= bc_commit_cnt_d;
-      bc_invalidate_q  <= bc_invalidate_d;
+      // bc_invalidate_q  <= bc_invalidate_d;
       vd_inc_q         <= vd_inc_d;
       op_a_element_pnt_q <= op_a_element_pnt_d;
     end
@@ -1108,7 +1108,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
     // Don't send request by default
     bc_ready_o            = 1'b0;
     // One cycle high
-    bc_invalidate_d = 1'b0;
+    bc_invalidate_o = 1'b0;
 
     //////////////////////////////////////////////////////////////////
     //  Issue the instruction and Write data into the result queue  //
@@ -1811,9 +1811,15 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
                 op_a_element_pnt_d = '0;
 
                 // Tell the buffer to prepare new data
-                if (lane_id_i == '0) bc_invalidate_d = 1'b1; // invalidate the buffer
+                if (lane_id_i == '0) bc_invalidate_o = 1'b1; // invalidate the buffer
               end
             end
+
+            // Send the invalidate signal if this is the second last data
+            // If send on the last data, the data path will be stalled one cycle due to signal buffering
+            // if (bc_issue_cnt_d + issue_element_cnt >= vinsn_issue_q.bl &&
+            //   issue_cnt_d == vlen_t'(1) && lane_id_i == '0)
+            //   bc_invalidate_o = 1'b1;
           end
         end
 

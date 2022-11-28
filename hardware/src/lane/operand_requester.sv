@@ -256,8 +256,6 @@ module operand_requester import ara_pkg::*; import rvv_pkg::*; #(
 
     // Is there a hazard during this cycle?
     logic stall;
-    assign stall = |(requester_q.hazard & ~(vinsn_result_written_q &
-                   (~{NrVInsn{requester_q.is_widening}} | requester_q.waw_hazard_counter)));
 
     // Did we get a grant?
     logic [NrBanks-1:0] operand_requester_gnt;
@@ -273,6 +271,7 @@ module operand_requester import ara_pkg::*; import rvv_pkg::*; #(
     vlen_t       bc_data_cnt_d, bc_data_cnt_q;
     logic  [4:0] bc_vs_pnt_d, bc_vs_pnt_q;
     vlen_t       bc_vs_cnt_d, bc_vs_cnt_q;
+    vaddr_t      bc_raw_addr_d, bc_raw_addr_q;
 
     always_ff @(posedge clk_i or negedge rst_ni) begin
       if (!rst_ni) begin
@@ -280,11 +279,13 @@ module operand_requester import ara_pkg::*; import rvv_pkg::*; #(
         bc_data_cnt_q <= '0;
         bc_vs_pnt_q   <= '0;
         bc_vs_cnt_q   <= '0;
+        bc_raw_addr_q <= '0;
       end else begin
         bc_addr_q     <= bc_addr_d;
         bc_data_cnt_q <= bc_data_cnt_d;
         bc_vs_pnt_q   <= bc_vs_pnt_d;
         bc_vs_cnt_q   <= bc_vs_cnt_d;
+        bc_raw_addr_q <= bc_raw_addr_d;
       end
     end
 
@@ -309,6 +310,11 @@ module operand_requester import ara_pkg::*; import rvv_pkg::*; #(
       bc_vs_pnt_d   = bc_vs_pnt_q;
       bc_vs_cnt_d   = bc_vs_cnt_q;
       bc_data_cnt_d = bc_data_cnt_q;
+      bc_raw_addr_d = bc_raw_addr_q;
+
+      // Default stall mechanism
+      stall = |(requester_q.hazard & ~(vinsn_result_written_q &
+               (~{NrVInsn{requester_q.is_widening}} | requester_q.waw_hazard_counter)));
 
       case (state_q)
         IDLE: begin
@@ -382,10 +388,27 @@ module operand_requester import ara_pkg::*; import rvv_pkg::*; #(
             bc_vs_pnt_d   = operand_request_i[requester].vs;
             bc_data_cnt_d = '0;
             bc_addr_d     = vaddr(operand_request_i[requester].vs, NrLanes);
+            bc_raw_addr_d = '0;
           end
         end
 
         REQUESTING: begin
+          // Only for VFBMACC
+          // MAC1 writes vd, and MAC2 reads vd
+          // MAC1 is finished in this lane, but still running in other lanes
+          // set stall to zero
+          // is_bc: op = VFBMACC
+          if (requester == 4 && requester_q.is_bc && |requester_q.hazard) begin
+            // if MAC1 is writing, store the address for comparision
+            // $clog2(requester_q.hazard) returns the instruction id
+            // TODO: more than one bit in requester_q.hazard are high
+            if (mfpu_result_req_i && mfpu_result_id_i == $clog2(requester_q.hazard))
+              bc_raw_addr_d = mfpu_result_addr_i;
+            // If the requested address is smaller than the last written address
+            // there is no hazard anymore
+            if (bc_raw_addr_q > bc_addr_q) stall = 1'b0;
+          end
+
           // Update waw counters
           for (int b = 0; b < NrVInsn; b++)
             if (vinsn_result_written_d[b])
@@ -486,6 +509,7 @@ module operand_requester import ara_pkg::*; import rvv_pkg::*; #(
                 bc_vs_pnt_d   = operand_request_i[requester].vs;
                 bc_data_cnt_d = '0;
                 bc_addr_d     = vaddr(operand_request_i[requester].vs, NrLanes);
+                bc_raw_addr_d = '0;
 
                 // The length should be at least one after the rescaling
                 if (requester_d.len == '0)
