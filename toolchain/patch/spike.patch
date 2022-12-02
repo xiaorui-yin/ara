@@ -1,0 +1,328 @@
+diff --git a/riscv/insns/vfbmacc_vf.h b/riscv/insns/vfbmacc_vf.h
+new file mode 100644
+index 00000000..81dc430e
+--- /dev/null
++++ b/riscv/insns/vfbmacc_vf.h
+@@ -0,0 +1,72 @@
++#define VI_VFP_BC_COMMON \
++  require_fp; \
++  require((P.VU.vsew == e16 && p->extension_enabled(EXT_ZFH)) || \
++          (P.VU.vsew == e32 && p->extension_enabled('F')) || \
++          (P.VU.vsew == e64 && p->extension_enabled('D'))); \
++  require_vector(true); \
++  require(STATE.frm->read() < 0x5); \
++  reg_t vl = P.VU.vl->read(); \
++  reg_t bl = P.VU.bl->read(); \
++  reg_t rd_num = insn.rd(); \
++  reg_t rs1_num = insn.rs1(); \
++  reg_t rs2_num = insn.rs2(); \
++  softfloat_roundingMode = STATE.frm->read();
++
++#define VI_VFP_BC_LOOP_BASE \
++  VI_VFP_COMMON \
++  for (reg_t i = P.VU.vstart->read(); i < vl; ++i) { \
++    rd_num += i; \
++    for (reg_t j = 0; j < bl; ++j) { \
++      VI_LOOP_ELEMENT_SKIP();
++
++#define VI_VFP_BC_LOOP_END \
++    } \
++  } \
++  P.VU.vstart->write(0);
++
++#define VFP_VF_BC_PARAMS(width) \
++  float##width##_t &vd = P.VU.elt<float##width##_t>(rd_num, j, true); \
++  float##width##_t rs1 = f##width(READ_FREG(rs1_num)); \
++  float##width##_t vs2 = P.VU.elt<float##width##_t>(rs2_num, i); \
++  float##width##_t bc  = P.VU.bc_elt<float##width##_t>(j);
++
++#define VI_VFP_VF_BC_LOOP(BODY16, BODY32, BODY64) \
++  VI_CHECK_SSS(false); \
++  VI_VFP_BC_LOOP_BASE \
++  switch (P.VU.vsew) { \
++    case e16: { \
++      VFP_VF_BC_PARAMS(16); \
++      BODY16; \
++      set_fp_exceptions; \
++      break; \
++    } \
++    case e32: { \
++      VFP_VF_BC_PARAMS(32); \
++      BODY32; \
++      set_fp_exceptions; \
++      break; \
++    } \
++    case e64: { \
++      VFP_VF_BC_PARAMS(64); \
++      BODY64; \
++      set_fp_exceptions; \
++      break; \
++    } \
++    default: \
++      require(0); \
++      break; \
++  }; \
++  DEBUG_RVV_FP_VF; \
++  VI_VFP_BC_LOOP_END
++
++VI_VFP_VF_BC_LOOP
++{{
++  vd = f16_mulAdd(bc, vs2, rs1);
++},
++{
++  vd = f32_mulAdd(bc, vs2, rs1);
++},
++{
++  vd = f64_mulAdd(bc, vs2, rs1);
++},
++}
+diff --git a/riscv/insns/vfbmacc_vv.h b/riscv/insns/vfbmacc_vv.h
+new file mode 100644
+index 00000000..dab5f163
+--- /dev/null
++++ b/riscv/insns/vfbmacc_vv.h
+@@ -0,0 +1,71 @@
++#define VI_VFP_BC_COMMON \
++  require_fp; \
++  require((P.VU.vsew == e16 && p->extension_enabled(EXT_ZFH)) || \
++          (P.VU.vsew == e32 && p->extension_enabled('F')) || \
++          (P.VU.vsew == e64 && p->extension_enabled('D'))); \
++  require_vector(true); \
++  require(STATE.frm->read() < 0x5); \
++  reg_t vl = P.VU.vl->read(); \
++  reg_t bl = P.VU.bl->read(); \
++  reg_t rd_num = insn.rd(); \
++  reg_t rs1_num = insn.rs1(); \
++  reg_t rs2_num = insn.rs2(); \
++  softfloat_roundingMode = STATE.frm->read();
++
++#define VI_VFP_BC_LOOP_BASE \
++  VI_VFP_COMMON \
++  for (reg_t i = P.VU.vstart->read(); i < vl; ++i) { \
++    rd_num += i; \
++    for (reg_t j = 0; j < bl; ++j) { \
++      VI_LOOP_ELEMENT_SKIP();
++
++#define VI_VFP_BC_LOOP_END \
++    } \
++  } \
++  P.VU.vstart->write(0);
++
++#define VFP_VV_BC_PARAMS(width) \
++  float##width##_t &vd = P.VU.elt<float##width##_t>(rd_num, j, true); \
++  float##width##_t vs2 = P.VU.elt<float##width##_t>(rs2_num, i); \
++  float##width##_t bc  = P.VU.bc_elt<float##width##_t>(j);
++
++#define VI_VFP_VV_BC_LOOP(BODY16, BODY32, BODY64) \
++  VI_CHECK_SSS(true); \
++  VI_VFP_BC_LOOP_BASE \
++  switch (P.VU.vsew) { \
++    case e16: { \
++      VFP_VV_BC_PARAMS(16); \
++      BODY16; \
++      set_fp_exceptions; \
++      break; \
++    } \
++    case e32: { \
++      VFP_VV_BC_PARAMS(32); \
++      BODY32; \
++      set_fp_exceptions; \
++      break; \
++    } \
++    case e64: { \
++      VFP_VV_BC_PARAMS(64); \
++      BODY64; \
++      set_fp_exceptions; \
++      break; \
++    } \
++    default: \
++      require(0); \
++      break; \
++  }; \
++  DEBUG_RVV_FP_VV; \
++  VI_VFP_BC_LOOP_END
++
++VI_VFP_VV_BC_LOOP
++{{
++  vd = f16_mulAdd(bc, vs2, vd);
++},
++{
++  vd = f32_mulAdd(bc, vs2, vd);
++},
++{
++  vd = f64_mulAdd(bc, vs2, vd);
++},
++}
+diff --git a/riscv/insns/vsetbl.h b/riscv/insns/vsetbl.h
+new file mode 100644
+index 00000000..a72b87b6
+--- /dev/null
++++ b/riscv/insns/vsetbl.h
+@@ -0,0 +1,2 @@
++require_vector_novtype(false, false);
++WRITE_RD(P.VU.set_bl(RS1));
+diff --git a/riscv/processor.cc b/riscv/processor.cc
+index 6d0d3499..b8ee8f68 100644
+--- a/riscv/processor.cc
++++ b/riscv/processor.cc
+@@ -161,9 +161,12 @@ void processor_t::parse_varch_string(const char* s)
+   if (vlen > 4096)
+     bad_varch_string(s, "vlen must be <= 4096");
+ 
++  int blen = 4096;
++
+   VU.VLEN = vlen;
+   VU.ELEN = elen;
+   VU.vlenb = vlen / 8;
++  VU.blenb = blen / 8;
+   VU.vstart_alu = vstart_alu;
+ }
+ 
+@@ -472,18 +475,24 @@ void state_t::reset(processor_t* const proc, reg_t max_isa)
+ void processor_t::vectorUnit_t::reset()
+ {
+   free(reg_file);
++  free(bc_buffer);
+   VLEN = get_vlen();
+   ELEN = get_elen();
++  BLEN = get_blen();
+   reg_file = malloc(NVPR * vlenb);
+   memset(reg_file, 0, NVPR * vlenb);
++  bc_buffer = malloc(blenb);
++  memset(bc_buffer, 0, blenb);
+ 
+   auto& csrmap = p->get_state()->csrmap;
+   csrmap[CSR_VXSAT] = vxsat = std::make_shared<vxsat_csr_t>(p, CSR_VXSAT);
+   csrmap[CSR_VSTART] = vstart = std::make_shared<vector_csr_t>(p, CSR_VSTART, /*mask*/ VLEN - 1);
+   csrmap[CSR_VXRM] = vxrm = std::make_shared<vector_csr_t>(p, CSR_VXRM, /*mask*/ 0x3ul);
+   csrmap[CSR_VL] = vl = std::make_shared<vector_csr_t>(p, CSR_VL, /*mask*/ 0);
++  csrmap[CSR_BL] = bl = std::make_shared<vector_csr_t>(p, CSR_BL, /*mask*/ 0);
+   csrmap[CSR_VTYPE] = vtype = std::make_shared<vector_csr_t>(p, CSR_VTYPE, /*mask*/ 0);
+   csrmap[CSR_VLENB] = std::make_shared<vector_csr_t>(p, CSR_VLENB, /*mask*/ 0, /*init*/ vlenb);
++  csrmap[CSR_BLENB] = std::make_shared<vector_csr_t>(p, CSR_BLENB, /*mask*/ 0, /*init*/ blenb);
+   assert(VCSR_VXSAT_SHIFT == 0);  // composite_csr_t assumes vxsat begins at bit 0
+   csrmap[CSR_VCSR] = std::make_shared<composite_csr_t>(p, CSR_VCSR, vxrm, vxsat, VCSR_VXRM_SHIFT);
+ 
+@@ -529,6 +538,14 @@ reg_t processor_t::vectorUnit_t::set_vl(int rd, int rs1, reg_t reqVL, reg_t newT
+   return vl->read();
+ }
+ 
++reg_t processor_t::vectorUnit_t::set_bl(reg_t reqBL)
++{
++  bl->write_raw(reqBL);
++
++  vstart->write_raw(0);
++  return bl->read();
++}
++
+ void processor_t::set_debug(bool value)
+ {
+   debug = value;
+diff --git a/riscv/processor.h b/riscv/processor.h
+index b415402d..0eaa4548 100644
+--- a/riscv/processor.h
++++ b/riscv/processor.h
+@@ -387,16 +387,18 @@ public:
+     public:
+       processor_t* p;
+       void *reg_file;
++      void *bc_buffer;
+       char reg_referenced[NVPR];
+       int setvl_count;
+       reg_t vlmax;
+       reg_t vlenb;
++      reg_t blenb;
+       csr_t_p vxsat;
+-      vector_csr_t_p vxrm, vstart, vl, vtype;
++      vector_csr_t_p vxrm, vstart, vl, vtype, bl;
+       reg_t vma, vta;
+       reg_t vsew;
+       float vflmul;
+-      reg_t ELEN, VLEN;
++      reg_t ELEN, VLEN, BLEN;
+       bool vill;
+       bool vstart_alu;
+ 
+@@ -423,6 +425,13 @@ public:
+           T *regStart = (T*)((char*)reg_file + vReg * (VLEN >> 3));
+           return regStart[n];
+         }
++
++      // broadcast buffer element for various SEW
++      template<class T>
++        T& bc_elt(reg_t n) {
++          T *bufferStart = (T*)((char*)bc_buffer);
++          return bufferStart[n];
++        }
+     public:
+ 
+       void reset();
+@@ -430,35 +439,43 @@ public:
+       vectorUnit_t():
+         p(0),
+         reg_file(0),
++        bc_buffer(0),
+         reg_referenced{0},
+         setvl_count(0),
+         vlmax(0),
+         vlenb(0),
++        blenb(0),
+         vxsat(0),
+         vxrm(0),
+         vstart(0),
+         vl(0),
+         vtype(0),
++        bl(0),
+         vma(0),
+         vta(0),
+         vsew(0),
+         vflmul(0),
+         ELEN(0),
+         VLEN(0),
++        BLEN(0),
+         vill(false),
+         vstart_alu(false) {
+       }
+ 
+       ~vectorUnit_t(){
+         free(reg_file);
++        free(bc_buffer);
+         reg_file = 0;
++        bc_buffer = 0;
+       }
+ 
+       reg_t set_vl(int rd, int rs1, reg_t reqVL, reg_t newType);
++      reg_t set_bl(reg_t reqBL);
+ 
+       reg_t get_vlen() { return VLEN; }
+       reg_t get_elen() { return ELEN; }
+       reg_t get_slen() { return VLEN; }
++      reg_t get_blen() { return BLEN; }
+ 
+       VRM get_vround_mode() {
+         return (VRM)(vxrm->read());
+diff --git a/riscv/v_ext_macros.h b/riscv/v_ext_macros.h
+index 1a2a7343..3c6c1fe1 100644
+--- a/riscv/v_ext_macros.h
++++ b/riscv/v_ext_macros.h
+@@ -1193,6 +1193,20 @@ reg_t index[P.VU.vlmax]; \
+   } \
+   P.VU.vstart->write(0);
+ 
++#define VI_LD_BC(offset, elt_width, is_mask_ldst) \
++  const reg_t bl = P.VU.bl->read(); \
++  const reg_t baseAddr = RS1; \
++  VI_CHECK_LOAD(elt_width, is_mask_ldst); \
++  for (reg_t i = 0; i < bl; ++i) { \
++    VI_ELEMENT_SKIP(i); \
++    VI_STRIP(i); \
++    P.VU.vstart->write(i); \
++    elt_width##_t val = MMU.load_#elt_width( \
++      baseAddr + offset * sizeof(elt_width##_t)); \
++    P.VU.bc_elt<elt_width##_t>(vreg_inxe) = val; \
++  } \
++  P.VU.vstart->write(0);
++
+ #define VI_LD_INDEX(elt_width, is_seg) \
+   const reg_t nf = insn.v_nf() + 1; \
+   const reg_t vl = P.VU.vl->read(); \

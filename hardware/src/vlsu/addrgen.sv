@@ -70,6 +70,7 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
     vew_e vew;
     logic is_load;
     logic is_burst; // Unit-strided instructions can be converted into AXI INCR bursts
+    logic is_bc;
   } addrgen_req_t;
   addrgen_req_t addrgen_req;
   logic         addrgen_req_valid;
@@ -142,6 +143,7 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
     .ready_i(idx_addr_ready_d),
     .data_o (idx_final_addr_q)
   );
+
 
   //////////////////////////
   //  Address generation  //
@@ -244,12 +246,14 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
         end else begin
           addrgen_req = '{
             addr    : pe_req_q.scalar_op,
-            len     : pe_req_q.vl,
+            len     : (pe_req_q.op == VLEBC) ?
+                      pe_req_q.bl : pe_req_q.vl,
             stride  : pe_req_q.stride,
             vew     : pe_req_q.vtype.vsew,
             is_load : is_load(pe_req_q.op),
             // Unit-strided loads/stores trigger incremental AXI bursts.
-            is_burst: (pe_req_q.op inside {VLE, VSE})
+            is_burst: (pe_req_q.op inside {VLE, VLEBC, VSE}),
+            is_bc   : (pe_req_q.op == VSSE && pe_req_q.bl != 0)
           };
           addrgen_req_valid = 1'b1;
 
@@ -271,7 +275,8 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
           vew     : pe_req_q.vtype.vsew,
           is_load : is_load(pe_req_q.op),
           // Unit-strided loads/stores trigger incremental AXI bursts.
-          is_burst: 1'b0
+          is_burst: 1'b0,
+          is_bc   : 1'b0
         };
         addrgen_req_valid = 1'b1;
 
@@ -655,6 +660,14 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
               //  Strided access //
               /////////////////////
 
+              // If op == VSSE and bl != 0
+              // Store NR_LANES 32-bit data in burst mode
+              // Then increase the base address by the stride size
+              // Example, 4-lanes, base_addr = 100, stride = 128
+              // addr = 100, d0, d1, d2, d3
+              // addr = 228, d4, d5, d6, d7
+              // addr = 356, d8, d9, d10, d11
+
               // AR Channel
               if (axi_addrgen_q.is_load) begin
                 axi_ar_o = '{
@@ -670,9 +683,9 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
               // AW Channel
               else begin
                 axi_aw_o = '{
-                  addr   : axi_addrgen_q.addr,
+                  addr   : axi_addrgen_d.addr,
                   len    : 0,
-                  size   : axi_addrgen_q.vew,
+                  size   : axi_addrgen_q.is_bc ? eff_axi_dw_log_q : axi_addrgen_q.vew,
                   cache  : CACHE_MODIFIABLE,
                   burst  : BURST_INCR,
                   default: '0
@@ -682,15 +695,15 @@ module addrgen import ara_pkg::*; import rvv_pkg::*; #(
 
               // Send this request to the load/store units
               axi_addrgen_queue = '{
-                addr   : axi_addrgen_q.addr,
-                size   : axi_addrgen_q.vew,
+                addr   : axi_addrgen_d.addr,
+                size   : axi_addrgen_q.is_bc ? eff_axi_dw_log_q : axi_addrgen_q.vew,
                 len    : 0,
                 is_load: axi_addrgen_q.is_load
               };
               axi_addrgen_queue_push = 1'b1;
 
               // Account for the requested operands
-              axi_addrgen_d.len  = axi_addrgen_q.len - 1;
+              axi_addrgen_d.len  = axi_addrgen_q.len - (axi_addrgen_q.is_bc ? NrLanes : 1);
               // Calculate the addresses for the next iteration, adding the correct stride
               axi_addrgen_d.addr = axi_addrgen_q.addr + axi_addrgen_q.stride;
 

@@ -1,0 +1,91 @@
+diff --git a/llvm/lib/Target/RISCV/RISCVInstrFormatsV.td b/llvm/lib/Target/RISCV/RISCVInstrFormatsV.td
+index 69e9d3553b30..e46e36966614 100644
+--- a/llvm/lib/Target/RISCV/RISCVInstrFormatsV.td
++++ b/llvm/lib/Target/RISCV/RISCVInstrFormatsV.td
+@@ -41,6 +41,7 @@ def LUMOPUnitStride  : RISCVLSUMOP<0b00000>;
+ def LUMOPUnitStrideMask : RISCVLSUMOP<0b01011>;
+ def LUMOPUnitStrideWholeReg : RISCVLSUMOP<0b01000>;
+ def LUMOPUnitStrideFF: RISCVLSUMOP<0b10000>;
++def LUMOPUnitStrideBroadcast: RISCVLSUMOP<0b11000>;
+ def SUMOPUnitStride  : RISCVLSUMOP<0b00000>;
+ def SUMOPUnitStrideMask : RISCVLSUMOP<0b01011>;
+ def SUMOPUnitStrideWholeReg : RISCVLSUMOP<0b01000>;
+@@ -103,6 +104,23 @@ class RVInstSetVL<dag outs, dag ins, string opcodestr, string argstr>
+   let Defs = [VTYPE, VL];
+ }
+ 
++class RVInstSetBL<dag outs, dag ins, string opcodestr, string argstr>
++    : RVInst<outs, ins, opcodestr, argstr, [], InstFormatR> {
++  bits<5> rs2;
++  bits<5> rs1;
++  bits<5> rd;
++
++  let Inst{31} = 1;
++  let Inst{30-25} = 0b010000;
++  let Inst{24-20} = rs2;
++  let Inst{19-15} = rs1;
++  let Inst{14-12} = 0b111;
++  let Inst{11-7} = rd;
++  let Opcode = OPC_OP_V.Value;
++
++  let Defs = [VTYPE, VL];
++}
++
+ class RVInstVV<bits<6> funct6, RISCVVFormat opv, dag outs, dag ins,
+                string opcodestr, string argstr>
+     : RVInst<outs, ins, opcodestr, argstr, [], InstFormatR> {
+diff --git a/llvm/lib/Target/RISCV/RISCVInstrInfoV.td b/llvm/lib/Target/RISCV/RISCVInstrInfoV.td
+index 1ad634344c09..0f534d777a22 100644
+--- a/llvm/lib/Target/RISCV/RISCVInstrInfoV.td
++++ b/llvm/lib/Target/RISCV/RISCVInstrInfoV.td
+@@ -155,6 +155,12 @@ class VUnitStrideLoad<RISCVWidth width, string opcodestr>
+                 (outs VR:$vd),
+                 (ins GPR:$rs1, VMaskOp:$vm), opcodestr, "$vd, (${rs1})$vm">;
+ 
++// unit-stride broadcast load vd, (rs1), vm, vd == broadcast_buffer
++class VUnitStrideLoadBroadcast<RISCVWidth width, string opcodestr>
++    : RVInstVLU<0b000, width.Value{3}, LUMOPUnitStrideBroadcast, width.Value{2-0},
++                (outs VR:$vd),
++                (ins GPR:$rs1, VMaskOp:$vm), opcodestr, "$vd, (${rs1})$vm">;
++
+ let vm = 1, RVVConstraint = NoConstraint in {
+ // unit-stride whole register load vl<nf>r.v vd, (rs1)
+ class VWholeLoad<bits<3> nf, RISCVWidth width, string opcodestr, RegisterClass VRC>
+@@ -839,6 +845,9 @@ def VSETIVLI : RVInstSetiVLi<(outs GPR:$rd), (ins uimm5:$uimm, VTypeIOp10:$vtype
+ 
+ def VSETVL : RVInstSetVL<(outs GPR:$rd), (ins GPR:$rs1, GPR:$rs2),
+                          "vsetvl", "$rd, $rs1, $rs2">;
++
++def VSETBL : RVInstSetBL<(outs GPR:$rd), (ins GPR:$rs1, GPR:$rs2),
++                         "vsetbl", "$rd, $rs1, $rs2">;
+ } // hasSideEffects = 1, mayLoad = 0, mayStore = 0
+ foreach eew = [8, 16, 32] in {
+   defvar w = !cast<RISCVWidth>("LSWidth" # eew);
+@@ -847,6 +856,9 @@ foreach eew = [8, 16, 32] in {
+   def VLE#eew#_V : VUnitStrideLoad<w, "vle"#eew#".v">, VLESched<eew>;
+   def VSE#eew#_V  : VUnitStrideStore<w,  "vse"#eew#".v">, VSESched<eew>;
+ 
++  // Vector Unit-Stride Broadcast Instructions
++  def VLE#eew#BC_V : VUnitStrideLoadBroadcast<w, "vle"#eew#"bc.v">, VLESched<eew>;
++
+   // Vector Unit-Stride Fault-only-First Loads
+   def VLE#eew#FF_V : VUnitStrideLoadFF<w,  "vle"#eew#"ff.v">, VLFSched<eew>;
+ 
+@@ -893,6 +905,9 @@ let Predicates = [HasVInstructionsI64] in {
+ def VLE64_V : VUnitStrideLoad<LSWidth64, "vle64.v">,
+               VLESched<64>;
+ 
++def VLE64BC_V : VUnitStrideLoadBroadcast<LSWidth64, "vle64bc.v">,
++              VLESched<64>;
++
+ def VLE64FF_V : VUnitStrideLoadFF<LSWidth64, "vle64ff.v">,
+                 VLFSched<64>;
+ 
+@@ -1200,6 +1215,7 @@ defm VFWMUL_V : VWMUL_FV_V_F<"vfwmul", 0b111000>;
+ // Vector Single-Width Floating-Point Fused Multiply-Add Instructions
+ let Uses = [FRM], mayRaiseFPException = true in {
+ defm VFMACC_V : VMAC_FV_V_F<"vfmacc", 0b101100>;
++defm VFBMACC_V : VMAC_FV_V_F<"vfbmacc", 0b111001>;
+ defm VFNMACC_V : VMAC_FV_V_F<"vfnmacc", 0b101101>;
+ defm VFMSAC_V : VMAC_FV_V_F<"vfmsac", 0b101110>;
+ defm VFNMSAC_V : VMAC_FV_V_F<"vfnmsac", 0b101111>;

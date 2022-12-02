@@ -37,7 +37,7 @@ module vldu import ara_pkg::*; import rvv_pkg::*; #(
     input  addrgen_axi_req_t               axi_addrgen_req_i,
     input  logic                           axi_addrgen_req_valid_i,
     output logic                           axi_addrgen_req_ready_o,
-    // Interface with the lanes
+    // Interface with the lanes and broadcast buffer
     output logic             [NrLanes-1:0] ldu_result_req_o,
     output vid_t             [NrLanes-1:0] ldu_result_id_o,
     output vaddr_t           [NrLanes-1:0] ldu_result_addr_o,
@@ -45,6 +45,7 @@ module vldu import ara_pkg::*; import rvv_pkg::*; #(
     output strb_t            [NrLanes-1:0] ldu_result_be_o,
     input  logic             [NrLanes-1:0] ldu_result_gnt_i,
     input  logic             [NrLanes-1:0] ldu_result_final_gnt_i,
+    output logic                           ldu_result_sel_o,
     // Interface with the Mask unit
     input  strb_t            [NrLanes-1:0] mask_i,
     input  logic             [NrLanes-1:0] mask_valid_i,
@@ -220,6 +221,9 @@ module vldu import ara_pkg::*; import rvv_pkg::*; #(
     mask_ready_o            = 1'b0;
     load_complete_o         = 1'b0;
 
+    // Load to VRF, by default
+    ldu_result_sel_o    = 1'b0;
+
     // Inform the main sequencer if we are idle
     pe_req_ready_o = !vinsn_queue_full;
 
@@ -344,14 +348,19 @@ module vldu import ara_pkg::*; import rvv_pkg::*; #(
 
         // Prepare for the next vector instruction
         if (vinsn_queue_d.issue_cnt != 0)
-          issue_cnt_d = vinsn_queue_q.vinsn[vinsn_queue_d.issue_pnt].vl << int'(vinsn_queue_q.vinsn[
-              vinsn_queue_d.issue_pnt].vtype.vsew);
+          issue_cnt_d = (vinsn_queue_q.vinsn[vinsn_queue_d.issue_pnt].op == VLEBC ?
+                         vinsn_queue_q.vinsn[vinsn_queue_d.issue_pnt].bl :
+                         vinsn_queue_q.vinsn[vinsn_queue_d.issue_pnt].vl)
+                         << int'(vinsn_queue_q.vinsn[vinsn_queue_d.issue_pnt].vtype.vsew);
       end
     end
 
     //////////////////////////////////
     //  Write results into the VRF  //
     //////////////////////////////////
+
+    // Load data to the broadcast buffer if the running instruction is VLEBC
+    ldu_result_sel_o = (vinsn_queue_q.vinsn[vinsn_queue_q.commit_pnt].op == VLEBC);
 
     for (int lane = 0; lane < NrLanes; lane++) begin: result_write
       ldu_result_req_o[lane]   = result_queue_valid_q[result_queue_read_pnt_q][lane];
@@ -369,7 +378,9 @@ module vldu import ara_pkg::*; import rvv_pkg::*; #(
         result_queue_valid_d[result_queue_read_pnt_q][lane] = 1'b0;
         result_queue_d[result_queue_read_pnt_q][lane]       = '0;
         // Reset the final gnt vector since we are now waiting for another final gnt
-        result_final_gnt_d[lane] = 1'b0;
+        // FIXME
+        if (~(vinsn_queue_q.vinsn[vinsn_queue_q.commit_pnt].op == VLEBC))
+          result_final_gnt_d[lane] = 1'b0;
       end
     end: result_write
 
@@ -411,8 +422,10 @@ module vldu import ara_pkg::*; import rvv_pkg::*; #(
 
       // Update the commit counter for the next instruction
       if (vinsn_queue_d.commit_cnt != '0)
-        commit_cnt_d = vinsn_queue_q.vinsn[vinsn_queue_d.commit_pnt].vl << int'(vinsn_queue_q.vinsn[
-            vinsn_queue_d.commit_pnt].vtype.vsew);
+        commit_cnt_d = (vinsn_queue_q.vinsn[vinsn_queue_d.commit_pnt].op == VLEBC ?
+                        vinsn_queue_q.vinsn[vinsn_queue_d.commit_pnt].bl :
+                        vinsn_queue_q.vinsn[vinsn_queue_d.commit_pnt].vl)
+                        << int'(vinsn_queue_q.vinsn[vinsn_queue_d.commit_pnt].vtype.vsew);
     end
 
     //////////////////////////////
@@ -424,11 +437,11 @@ module vldu import ara_pkg::*; import rvv_pkg::*; #(
       vinsn_queue_d.vinsn[vinsn_queue_q.accept_pnt] = pe_req_i;
       vinsn_running_d[pe_req_i.id]                  = 1'b1;
 
-      // Initialize counters
+      // Initialize counters (use broadcast length if it is a broadcast load)
       if (vinsn_queue_d.issue_cnt == '0)
-        issue_cnt_d = pe_req_i.vl << int'(pe_req_i.vtype.vsew);
+        issue_cnt_d = (pe_req_i.op == VLEBC ? pe_req_i.bl : pe_req_i.vl) << int'(pe_req_i.vtype.vsew);
       if (vinsn_queue_d.commit_cnt == '0)
-        commit_cnt_d = pe_req_i.vl << int'(pe_req_i.vtype.vsew);
+        commit_cnt_d = (pe_req_i.op == VLEBC ? pe_req_i.bl : pe_req_i.vl) << int'(pe_req_i.vtype.vsew);
 
       // Bump pointers and counters of the vector instruction queue
       vinsn_queue_d.accept_pnt += 1;

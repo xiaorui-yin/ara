@@ -47,6 +47,12 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
     input  elen_t                        sldu_operand_i,
     input  logic                         sldu_mfpu_valid_i,
     output logic                         sldu_mfpu_ready_o,
+    // Interface with the mini Slide Unit
+    input  elen_t                        bc_data_i,
+    input  logic                         bc_valid_i,
+    output logic                         bc_ready_o,
+    // First lane only
+    output logic                         bc_invalidate_o, // lane 0
     // Interface with the Mask unit
     output elen_t                        mask_operand_o,
     output logic                         mask_operand_valid_o,
@@ -470,7 +476,8 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
   // Signal to indicate the state of the MFPU
   typedef enum logic [2:0] {
     NO_REDUCTION, INTRA_LANE_REDUCTION, INTER_LANES_REDUCTION,
-    WAIT_STATE, SIMD_REDUCTION, OSUM_REDUCTION, MFPU_WAIT
+    WAIT_STATE, SIMD_REDUCTION, OSUM_REDUCTION, MFPU_WAIT,
+    BC_MAC
   } mfpu_state_e;
   mfpu_state_e mfpu_state_d, mfpu_state_q;
 
@@ -515,6 +522,8 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
       next_mfpu_state = INTRA_LANE_REDUCTION;
     else if (op inside {VFREDOSUM, VFWREDOSUM})
       next_mfpu_state = OSUM_REDUCTION;
+    else if (op == VFBMACC)
+      next_mfpu_state = BC_MAC;
     else
       next_mfpu_state = NO_REDUCTION;
   endfunction : next_mfpu_state
@@ -580,6 +589,53 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
       15: reduction_rx_cnt_init = reduction_rx_cnt_t'(4);
     endcase
   endfunction: reduction_rx_cnt_init
+
+  ///////////////////
+  // Broadcast MAC //
+  ///////////////////
+
+  vlen_t bc_issue_cnt_d, bc_issue_cnt_q;
+  vlen_t bc_process_cnt_d, bc_process_cnt_q;
+  vlen_t bc_commit_cnt_d, bc_commit_cnt_q;
+  // logic  bc_invalidate_d, bc_invalidate_q;
+  logic [4:0] vd_inc_d, vd_inc_q;
+
+  logic [1:0] op_a_element_pnt_d, op_a_element_pnt_q;
+
+  // assign bc_invalidate_o = bc_invalidate_q;
+
+  // TODO: other precisions
+  function automatic elen_t get_op_a(elen_t operand_a, logic [1:0] op_a_element_pnt, vew_e ew);
+    case (ew)
+      EW32: begin
+        case (op_a_element_pnt)
+          2'd0: get_op_a = {2{operand_a[31:0]}};
+          2'd1: get_op_a = {2{operand_a[63:32]}};
+        default: get_op_a = {2{operand_a[31:0]}};
+        endcase
+      end
+    default: get_op_a = {2{operand_a[31:0]}};
+    endcase
+  endfunction: get_op_a
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if(~rst_ni) begin
+      bc_issue_cnt_q   <= '0;
+      bc_process_cnt_q <= '0;
+      bc_commit_cnt_q  <= '0;
+      // bc_invalidate_q  <= 1'b0;
+      vd_inc_q         <= '0;
+      op_a_element_pnt_q <= '0;
+    end else begin
+      bc_issue_cnt_q   <= bc_issue_cnt_d;
+      bc_process_cnt_q <= bc_process_cnt_d;
+      bc_commit_cnt_q  <= bc_commit_cnt_d;
+      // bc_invalidate_q  <= bc_invalidate_d;
+      vd_inc_q         <= vd_inc_d;
+      op_a_element_pnt_q <= op_a_element_pnt_d;
+    end
+  end
+
   ///////////
   //  FPU  //
   ///////////
@@ -679,6 +735,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
         VFRDIV: fp_op = DIV;
         VFSQRT: fp_op = SQRT;
         VFMACC,
+        VFBMACC,
         VFMADD,
         VFMSAC,
         VFMSUB: begin
@@ -1039,6 +1096,19 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
 
     // Don't prevent commit by default
     prevent_commit = 1'b0;
+
+    bc_issue_cnt_d        = bc_issue_cnt_q;
+    bc_process_cnt_d      = bc_process_cnt_q;
+    bc_commit_cnt_d       = bc_commit_cnt_q;
+    op_a_element_pnt_d    = op_a_element_pnt_q;
+    vd_inc_d              = vd_inc_q;
+
+
+    // First lane only
+    // Don't send request by default
+    bc_ready_o            = 1'b0;
+    // One cycle high
+    bc_invalidate_o = 1'b0;
 
     //////////////////////////////////////////////////////////////////
     //  Issue the instruction and Write data into the result queue  //
@@ -1688,6 +1758,115 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
         intra_op_rx_cnt_d       = '0;
         osum_issue_cnt_d        = '0;
       end
+      BC_MAC: begin
+        operand_a = get_op_a(mfpu_operand_i[1], op_a_element_pnt_q, vinsn_issue_q.vtype.vsew); // vs2
+        operand_b = bc_data_i; // vs1, from bc_buffer
+        operand_c = (vinsn_issue_q.use_scalar_op) ? scalar_op : mfpu_operand_i[2]; // vd or rs1 TODO: more reigster
+
+        operands_valid = mfpu_operand_valid_i[1] &&
+                         (~vinsn_issue_q.use_vd_op || mfpu_operand_valid_i[2]) &&
+                         bc_valid_i;
+
+        if (operands_valid && vinsn_issue_valid) begin
+          vfpu_in_valid = 1'b1;
+
+          if (vfpu_in_ready) begin
+            // How many elements are we issuing?
+            automatic logic [3:0] issue_element_cnt =
+              (1 << (int'(EW64) - int'(vinsn_issue_q.vtype.vsew)));
+            // Update the number of elements still to be issued
+            if (issue_element_cnt > vinsn_issue_q.bl - bc_issue_cnt_q)
+              issue_element_cnt = vinsn_issue_q.bl - bc_issue_cnt_q;
+            bc_issue_cnt_d = bc_issue_cnt_q + issue_element_cnt;
+
+            mfpu_operand_ready_o[0] = 1'b0;
+            mfpu_operand_ready_o[1] = 1'b0;
+            mfpu_operand_ready_o[2] = vinsn_issue_q.use_vd_op;
+            bc_ready_o = 1'b1;
+
+            if (bc_issue_cnt_d == vinsn_issue_q.bl) begin
+              // Process only one element at a time
+              issue_cnt_d = issue_cnt_q - 1;
+              // Reset
+              bc_issue_cnt_d = '0;
+              // TODO: FP32 only, need to support other precisions
+              op_a_element_pnt_d = op_a_element_pnt_q + 1;
+              if (op_a_element_pnt_d == 2'd2 ||
+              op_a_element_pnt_d == vinsn_issue_q.vl) begin
+                // Get the next element from A
+                mfpu_operand_ready_o[1] = 1'b1;
+                op_a_element_pnt_d = '0;
+              end
+
+              // Finished issuing the micro-operations of this vector instruction
+              if (issue_cnt_d == '0) begin
+                // Bump issue counter and pointers
+                vinsn_queue_d.issue_cnt -= 1;
+                if (vinsn_queue_q.issue_pnt == VInsnQueueDepth-1) vinsn_queue_d.issue_pnt = '0;
+                else vinsn_queue_d.issue_pnt = vinsn_queue_q.issue_pnt + 1;
+
+                if (vinsn_queue_d.issue_cnt != 0) issue_cnt_d =
+                  vinsn_queue_q.vinsn[vinsn_queue_d.issue_pnt].vl;
+
+                op_a_element_pnt_d = '0;
+
+                // Tell the buffer to prepare new data
+                if (lane_id_i == '0) bc_invalidate_o = 1'b1; // invalidate the buffer
+              end
+            end
+
+            // Send the invalidate signal if this is the second last data
+            // If send on the last data, the data path will be stalled one cycle due to signal buffering
+            // if (bc_issue_cnt_d + issue_element_cnt >= vinsn_issue_q.bl &&
+            //   issue_cnt_d == vlen_t'(1) && lane_id_i == '0)
+            //   bc_invalidate_o = 1'b1;
+          end
+        end
+
+        if (vfpu_out_valid && !result_queue_full) begin
+          // How many elements have we processed?
+          automatic logic [3:0] processed_element_cnt =
+            (1 << (int'(EW64) - int'(vinsn_processing_q.vtype.vsew)));
+          // Update the number of elements still to be processed
+          if (processed_element_cnt > vinsn_processing_q.bl - bc_process_cnt_q)
+            processed_element_cnt = vinsn_processing_q.bl - bc_process_cnt_q;
+          bc_process_cnt_d = bc_process_cnt_q + processed_element_cnt;
+
+          if (bc_process_cnt_d == vinsn_processing_q.bl) begin
+            to_process_cnt_d = to_process_cnt_q - 1;
+            bc_process_cnt_d = '0;
+            // Write result to the next vector register
+            vd_inc_d         = vd_inc_q + 1;
+            if (vd_inc_d == vinsn_processing_q.vl)
+              vd_inc_d = '0;
+
+            if (to_process_cnt_d == '0) begin
+              vinsn_queue_d.processing_cnt -= 1;
+              // Bump issue processing pointers
+              if (vinsn_queue_q.processing_pnt == VInsnQueueDepth-1)
+                vinsn_queue_d.processing_pnt = '0;
+              else vinsn_queue_d.processing_pnt = vinsn_queue_q.processing_pnt + 1;
+
+              if (vinsn_queue_d.processing_cnt != 0) to_process_cnt_d =
+                vinsn_queue_q.vinsn[vinsn_queue_d.processing_pnt].vl;
+            end
+          end
+
+          result_queue_d[result_queue_write_pnt_q].id = vinsn_processing_q.id;
+          // Write every bl elements to a new register
+          result_queue_d[result_queue_write_pnt_q].addr = vaddr(vinsn_processing_q.vd + vd_inc_q, NrLanes) +
+            (bc_process_cnt_q >> (int'(EW64) - vinsn_processing_q.vtype.vsew));
+          result_queue_d[result_queue_write_pnt_q].wdata = vfpu_processed_result;
+          result_queue_d[result_queue_write_pnt_q].be = '1; // TODO: depends on #elements
+          result_queue_valid_d[result_queue_write_pnt_q] = 1'b1;
+
+          result_queue_cnt_d += 1;
+          if (result_queue_write_pnt_q == ResultQueueDepth-1)
+            result_queue_write_pnt_d = 0;
+          else
+            result_queue_write_pnt_d = result_queue_write_pnt_q + 1;
+        end
+      end
       default:;
     endcase
 
@@ -1697,7 +1876,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
 
     // Send result information to the VRF
     // Use mfpu_result_gnt register instead of mfpu_state, because the state could be changed
-    if (mfpu_state_q inside {NO_REDUCTION, MFPU_WAIT} || ((lane_id_i == '0) && commit_cnt_d == '0))
+    if (mfpu_state_q inside {NO_REDUCTION, MFPU_WAIT, BC_MAC} || ((lane_id_i == '0) && commit_cnt_d == '0))
       mfpu_result_req_o = (result_queue_valid_q[result_queue_read_pnt_q] && !result_queue_q[result_queue_read_pnt_q].mask) ? 1'b1 : 1'b0;
     else
       mfpu_result_req_o = 1'b0;
@@ -1726,9 +1905,17 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
 
       // Decrement the counter of remaining vector elements waiting to be written
       // Don't do it in case of a reduction
-      if (!is_reduction(vinsn_commit.op)) begin
+      if (!is_reduction(vinsn_commit.op) && vinsn_commit.op != VFBMACC) begin
         commit_cnt_d = commit_cnt_q - commit_element_cnt;
         if (commit_cnt_q < commit_element_cnt) commit_cnt_d = '0;
+      end else if (vinsn_commit.op == VFBMACC) begin
+        if (commit_element_cnt > vinsn_commit.bl - bc_commit_cnt_q)
+          commit_element_cnt = vinsn_commit.bl - bc_commit_cnt_q;
+        bc_commit_cnt_d = bc_commit_cnt_q + commit_element_cnt;
+        if (bc_commit_cnt_d == vinsn_commit.bl) begin
+          commit_cnt_d = commit_cnt_q - 1;
+          bc_commit_cnt_d = '0;
+        end
       end
     end
 

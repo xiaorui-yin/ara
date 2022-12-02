@@ -83,6 +83,15 @@ module lane import ara_pkg::*; import rvv_pkg::*; #(
     input  strb_t                                          masku_result_be_i,
     output logic                                           masku_result_gnt_o,
     output logic                                           masku_result_final_gnt_o,
+    // Broadcast data path
+    input  elen_t                                          bc_data_i,
+    output elen_t                                          bc_data_o,
+    input  logic                                           bc_valid_i,
+    output logic                                           bc_valid_o,
+    input  logic                                           bc_ready_i,
+    output logic                                           bc_ready_o,
+    // First lane only
+    output logic                                           bc_invalidate_o,
     // Interface between the Mask unit and the VFUs
     input  strb_t                                          mask_i,
     input  logic                                           mask_valid_i,
@@ -347,6 +356,10 @@ module lane import ara_pkg::*; import rvv_pkg::*; #(
   logic sldu_alu_req_valid_o, sldu_mfpu_req_valid_o;
   logic sldu_alu_ready, sldu_mfpu_ready;
 
+  // Broadcast data
+  elen_t bc_vmfpu_data;
+  logic  bc_vmfpu_valid, bc_vmfpu_ready;
+
   vector_fus_stage #(
     .NrLanes   (NrLanes   ),
     .FPUSupport(FPUSupport),
@@ -399,6 +412,11 @@ module lane import ara_pkg::*; import rvv_pkg::*; #(
     .mfpu_operand_i       (mfpu_operand                           ),
     .mfpu_operand_valid_i (mfpu_operand_valid                     ),
     .mfpu_operand_ready_o (mfpu_operand_ready                     ),
+    // Broadcast data
+    .bc_data_i            (bc_vmfpu_data                          ),
+    .bc_valid_i           (bc_vmfpu_valid                         ),
+    .bc_ready_o           (bc_vmfpu_ready                         ),
+    .bc_invalidate_o      (bc_invalidate_o                        ),
     // Interface with the Mask unit
     .mask_operand_o       (mask_operand_o[2 +: NrMaskFUnits]      ),
     .mask_operand_valid_o (mask_operand_valid_o[2 +: NrMaskFUnits]),
@@ -437,6 +455,25 @@ module lane import ara_pkg::*; import rvv_pkg::*; #(
   assign sldu_mfpu_valid   = sldu_red_valid_i & (sldu_mux_sel_q == MFPU_RED);
   assign sldu_result_gnt_o = sldu_mux_sel_q == NO_RED ? sldu_result_gnt_opqueues :
                             (sldu_mux_sel_q == ALU_RED ? sldu_alu_ready : sldu_mfpu_ready);
+
+  /*************************
+  *   Broadcast Data FF    *
+  *************************/
+
+  bc_operand_queue
+  i_bc_operand_queue (
+    .clk_i            (clk_i            ),
+    .rst_ni           (rst_ni           ),
+    .bc_ready_o       (bc_ready_o       ),
+    .bc_data_i        (bc_data_i        ),
+    .bc_valid_i       (bc_valid_i       ),
+    .bc_ready_i       (bc_ready_i       ),
+    .bc_data_o        (bc_data_o        ),
+    .bc_valid_o       (bc_valid_o       ),
+    .bc_vmfpu_ready_i (bc_vmfpu_ready   ),
+    .bc_vmfpu_data_o  (bc_vmfpu_data    ),
+    .bc_vmfpu_valid_o (bc_vmfpu_valid   )
+  );
 
   //////////////////
   //  Assertions  //

@@ -1,2 +1,8 @@
 bin
 common/link.ld
+__pycache__/
+*.c.o
+data.S
+*.spike
+spike_runs/
+ideal_dispatcher/
