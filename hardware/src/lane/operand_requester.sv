@@ -400,14 +400,18 @@ module operand_requester import ara_pkg::*; import rvv_pkg::*; #(
           // set stall to zero
           // is_bc: op = VFBMACC
           if (requester == 4 && requester_q.is_bc && |requester_q.hazard) begin
-            // if MAC1 is writing, store the address for comparision
-            // $clog2(requester_q.hazard) returns the instruction id
-            // TODO: more than one bit in requester_q.hazard are high
-            if (mfpu_result_req_i && mfpu_result_id_i == $clog2(requester_q.hazard))
-              bc_raw_addr_d = mfpu_result_addr_i;
-            // If the requested address is smaller than the last written address
-            // there is no hazard anymore
-            if (bc_raw_addr_q > bc_addr_q) stall = 1'b0;
+            // // if MAC1 is writing, store the address for comparision
+            // // $clog2(requester_q.hazard) returns the instruction id
+            // // TODO: more than one bit in requester_q.hazard are high
+            // // FIXME: clog2 elaboration error
+            // // if (mfpu_result_req_i && mfpu_result_id_i == $clog2(requester_q.hazard))
+            // if (mfpu_result_req_i)
+            //   bc_raw_addr_d = mfpu_result_addr_i;
+            // // If the requested address is smaller than the last written address
+            // // there is no hazard anymore
+            // if (bc_raw_addr_q > bc_addr_q) stall = 1'b0;
+            if (mfpu_result_req_i && mfpu_result_id_i == requester_q.id)
+              stall = 1'b0;
           end
 
           // Update waw counters
