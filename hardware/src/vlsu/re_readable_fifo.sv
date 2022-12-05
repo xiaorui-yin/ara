@@ -36,8 +36,9 @@ module re_readable_fifo #(
     output logic     [ADDR_DEPTH-1:0] usage_o,  // fill pointer
     // as long as the queue is not full we can push new data
     input  wr_dtype  data_i,           // data to push into the queue
+    input  logic     [$clog2(RATIO):0] valid_cnt_i,
     input  logic     push_i,           // data is valid and can be pushed to the queue
-    output logic     load_finished_o,  // TODO
+    input  logic     load_complete_i,  // TODO
     // as long as the queue is not empty we can pop new elements
     output rd_dtype  data_o,           // output data
     input  logic     pop_i             // pop head from queue
@@ -80,7 +81,6 @@ module re_readable_fifo #(
         gate_clock      = 1'b1;
 
         load_complete_d  = load_complete_q;
-        load_finished_o  = 1'b0;
 
         if (~load_complete_q) begin
           // push a new element to the queue
@@ -88,20 +88,20 @@ module re_readable_fifo #(
               // push the data onto the queue
               for (int i = 0; i < RATIO; i++)
                 mem_n[write_pointer_q + i] = data_i[i * RD_DATA_WIDTH +: RD_DATA_WIDTH];
-              /* mem_n[write_pointer_q] = data_i; */
 
               // un-gate the clock, we want to write something
               gate_clock = 1'b0;
               // increment the write counter
-              write_pointer_n = write_pointer_q + RATIO;
-              if (write_pointer_n == FifoDepth[ADDR_DEPTH-1:0]) begin
-                  write_pointer_n = '0;
+              write_pointer_n = write_pointer_q + valid_cnt_i;
+              if (load_complete_i) begin
+                  // Enter the read-only state in the next cycle
                   load_complete_d = 1'b1;
-                  load_finished_o = 1'b1;
+              end else if (write_pointer_n == FifoDepth[ADDR_DEPTH-1:0]) begin
+                  write_pointer_n = '0;
               end
 
               // increment the overall counter
-              status_cnt_n    = status_cnt_q + RATIO;
+              status_cnt_n    = status_cnt_q + valid_cnt_i;
           end
 
           if (pop_i && ~empty_o) begin
@@ -121,7 +121,7 @@ module re_readable_fifo #(
         end else begin
           // read only state
           if (pop_i) begin
-            if (read_pointer_n == FifoDepth[ADDR_DEPTH-1:0] - 1)
+            if (read_pointer_n == write_pointer_q - 1)
                 read_pointer_n = '0;
             else
                 read_pointer_n = read_pointer_q + 1;

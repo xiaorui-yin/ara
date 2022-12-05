@@ -201,16 +201,17 @@ module ara import ara_pkg::*; #(
   logic                                        bc_invalidate;
 
   bc_buffer #(
-    .NrLanes                  (NrLanes                       ),
-    .AxiDataWidth             (AxiDataWidth                  )
+    .NrLanes                  (NrLanes                       )
   ) i_bc_buffer(
     .clk_i                    (clk_i                         ),
     .rst_ni                   (rst_ni                        ),
     // Interface with the load unit
     .ldu_result_req_i         (ldu_bc_result_req             ),
     .ldu_result_wdata_i       (ldu_bc_result_wdata           ),
+    .ldu_result_be_i          (ldu_bc_result_be              ),
     .ldu_result_gnt_o         (ldu_bc_result_gnt             ),
     .ldu_result_final_gnt_o   (ldu_bc_result_final_gnt       ),
+    .load_complete_i          (load_complete                 ),
     // Interface with the first lane
     .bc_ready_i               (bc_ready                      ),
     .bc_data_o                (bc_data                       ),
@@ -459,10 +460,8 @@ module ara import ara_pkg::*; #(
     if (ldu_result_sel == 1'b1) begin
       // load data to the broadcast buffer
       ldu_bc_result_req       = ldu_result_req;
-      // ldu_bc_result_addr      = ldu_result_addr;
-      // ldu_bc_result_id        = ldu_result_id;
       ldu_bc_result_wdata     = ldu_result_wdata;
-      // ldu_bc_result_be        = ldu_result_be;
+      ldu_bc_result_be        = ldu_result_be;
 
       ldu_result_gnt          = ldu_bc_result_gnt;
       ldu_result_final_gnt    = ldu_bc_result_final_gnt;
