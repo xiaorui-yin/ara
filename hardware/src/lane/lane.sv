@@ -13,6 +13,7 @@ module lane import ara_pkg::*; import rvv_pkg::*; #(
     parameter  int           unsigned NrLanes         = 1, // Number of lanes
     // Support for floating-point data types
     parameter  fpu_support_e          FPUSupport      = FPUSupportHalfSingleDouble,
+    parameter  int                    Lane0           = 0,
     // Dependant parameters. DO NOT CHANGE!
     // VRF Parameters
     localparam int           unsigned MaxVLenPerLane  = VLEN / NrLanes,       // In bits
@@ -460,8 +461,9 @@ module lane import ara_pkg::*; import rvv_pkg::*; #(
   *   Broadcast Data FF    *
   *************************/
 
-  bc_operand_queue
-  i_bc_operand_queue (
+  bc_operand_queue # (
+    .Lane0            (Lane0            )
+  ) i_bc_operand_queue (
     .clk_i            (clk_i            ),
     .rst_ni           (rst_ni           ),
     .bc_ready_o       (bc_ready_o       ),
