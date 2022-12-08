@@ -67,7 +67,7 @@ package ara_pkg;
   localparam int unsigned LatFCompEW16    = 'd3;
   localparam int unsigned LatFCompEW8     = 'd2;
   localparam int unsigned LatFCompEW16Alt = 'd3;
-  localparam int unsigned LatFDivSqrt     = 'd3;
+  localparam int unsigned LatFDivSqrt     = 'd6;
   localparam int unsigned LatFNonComp     = 'd1;
   localparam int unsigned LatFConv        = 'd2;
   // Define the maximum FPU latency
