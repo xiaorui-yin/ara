@@ -11,6 +11,8 @@ module ara import ara_pkg::*; #(
     parameter  int           unsigned NrLanes      = 0,                          // Number of parallel vector lanes.
     // Support for floating-point data types
     parameter  fpu_support_e          FPUSupport   = FPUSupportHalfSingleDouble,
+    // Support for fixed-point data types
+    parameter  logic                  FixPtSupport = FixedPointEnable,
     // AXI Interface
     parameter  int           unsigned AxiDataWidth = 0,
     parameter  int           unsigned AxiAddrWidth = 0,
@@ -81,34 +83,38 @@ module ara import ara_pkg::*; #(
   // Interface with the lanes
   logic      [NrLanes-1:0][4:0] fflags_ex;
   logic      [NrLanes-1:0]      fflags_ex_valid;
+  logic      [NrLanes-1:0]      vxsat_flag;
+  vxrm_t     [NrLanes-1:0]      alu_vxrm;
 
   ara_dispatcher #(
     .NrLanes(NrLanes)
   ) i_dispatcher (
-    .clk_i            (clk_i           ),
-    .rst_ni           (rst_ni          ),
+    .clk_i             (clk_i           ),
+    .rst_ni            (rst_ni          ),
     // Interface with Ariane
-    .acc_req_i        (acc_req_i       ),
-    .acc_req_valid_i  (acc_req_valid_i ),
-    .acc_req_ready_o  (acc_req_ready_o ),
-    .acc_resp_o       (acc_resp_o      ),
-    .acc_resp_valid_o (acc_resp_valid_o),
-    .acc_resp_ready_i (acc_resp_ready_i),
+    .acc_req_i         (acc_req_i       ),
+    .acc_req_valid_i   (acc_req_valid_i ),
+    .acc_req_ready_o   (acc_req_ready_o ),
+    .acc_resp_o        (acc_resp_o      ),
+    .acc_resp_valid_o  (acc_resp_valid_o),
+    .acc_resp_ready_i  (acc_resp_ready_i),
     // Interface with the sequencer
-    .ara_req_o        (ara_req         ),
-    .ara_req_valid_o  (ara_req_valid   ),
-    .ara_req_ready_i  (ara_req_ready   ),
-    .ara_resp_i       (ara_resp        ),
-    .ara_resp_valid_i (ara_resp_valid  ),
-    .ara_idle_i       (ara_idle        ),
+    .ara_req_o         (ara_req         ),
+    .ara_req_valid_o   (ara_req_valid   ),
+    .ara_req_ready_i   (ara_req_ready   ),
+    .ara_resp_i        (ara_resp        ),
+    .ara_resp_valid_i  (ara_resp_valid  ),
+    .ara_idle_i        (ara_idle        ),
     // Interface with the lanes
-    .fflags_ex_i      (fflags_ex       ),
-    .fflags_ex_valid_i(fflags_ex_valid ),
+    .vxsat_flag_i      (vxsat_flag      ),
+    .alu_vxrm_o        (alu_vxrm        ),
+    .fflags_ex_i       (fflags_ex       ),
+    .fflags_ex_valid_i (fflags_ex_valid ),
     // Interface with the Vector Store Unit
-    .core_st_pending_o(core_st_pending ),
-    .load_complete_i  (load_complete   ),
-    .store_complete_i (store_complete  ),
-    .store_pending_i  (store_pending   )
+    .core_st_pending_o (core_st_pending ),
+    .load_complete_i   (load_complete   ),
+    .store_complete_i  (store_complete  ),
+    .store_pending_i   (store_pending   )
   );
 
   /////////////////
@@ -274,9 +280,10 @@ module ara import ara_pkg::*; #(
 
   for (genvar lane = 0; lane < NrLanes; lane++) begin: gen_lanes
     lane #(
-      .NrLanes   (NrLanes   ),
+      .NrLanes     (NrLanes     ),
       .Lane0     (lane==0   ),
-      .FPUSupport(FPUSupport)
+      .FPUSupport  (FPUSupport  ),
+      .FixPtSupport(FixPtSupport)
     ) i_lane (
       .clk_i                           (clk_i                               ),
       .rst_ni                          (rst_ni                              ),
@@ -285,6 +292,8 @@ module ara import ara_pkg::*; #(
       .scan_data_o                     (/* Unused */                        ),
       .lane_id_i                       (lane[idx_width(NrLanes)-1:0]        ),
       // Interface with the dispatcher
+      .vxsat_flag_o                    (vxsat_flag[lane]                    ),
+      .alu_vxrm_i                      (alu_vxrm[lane]                      ),
       .fflags_ex_o                     (fflags_ex[lane]                     ),
       .fflags_ex_valid_o               (fflags_ex_valid[lane]               ),
       // Interface with the sequencer
@@ -367,6 +376,7 @@ module ara import ara_pkg::*; #(
       assign bc_lane_ready_in[lane] = bc_lane_ready_out[lane + 1];
     end
   end: gen_lanes
+
 
   //////////////////////////////
   //  Vector Load/Store Unit  //

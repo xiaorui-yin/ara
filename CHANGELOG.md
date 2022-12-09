@@ -58,6 +58,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
  - Operand requesters sanitize partial operands during a reduction
  - Fix load/store-complete signals to CVA6
  - Remove latches/repeated-signals from `masku`
+ - Reshuffle all the registers of a register group that have `eew_q != eew_d` when `LMUL > 1`
+ - `VLXE` and `VSXE` need to wait that the SlideAddrGenA opreq is free before being issued by the lane sequencer to the operand requester stage
+ - Do not trap instructions with no operands in the main sequencer
+ - Commit a reduction only after a grant from the VRF
 
 ### Added
 
@@ -73,6 +77,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
  - fdotproduct benchmark to evaluate dot products with reductions
  - fredsum benchmark to evaluate fp-reductions
  - riscv-tests for `vfredusum`, `vfredosum`, `vfredmin`, `vfredmax`, `vfwredusum`, `vfwredosum`
+ - Support for vector single-width fractional multiply with rounding and saturation instruction: `vsmul`
+ - Support for vector single-width scaling shift instructions: `vssra`, `vssrl`
+ - Support for vector narrowing fixed-point clip instructions: `vnclip`, `vnclipu`
  - Vector floating-point classify instruction (`vfclass`)
  - Vector floating-point divide instructions (`vfdiv`, `vfrdiv`)
  - Vector floating-point square-root instruction (`vfsqrt`)
@@ -96,9 +103,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
  - Support for vector mask instructions: `vmsbf`, `vmsof`, `vmsif`, `viota`, `vid`
  - Add support for vector mask population count and find first set bit instructions: `vcpop.m`, `vfirst.m`
  - Add Spyglass linting script
+ - Add parametrized support for Fixed-Point math
 
 ### Changed
 
+ - Fixed-Point instructions were added (`VSADDU`, `VSADD`, `VAADD`, `VAADDU`, `VSSUBU`, `VSSUB`, `VASUB`, `VASUBU`)
  - The main sequencer issues instructions every time the target unit has a non-full instruction queue
  - The main sequencer stalls if the instructions target a lane, and its operand requesters are not ready
  - New instructions enter the main sequencer with a token that marks them as new, and the related counter is updated upon arrival

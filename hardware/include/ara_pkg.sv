@@ -32,6 +32,12 @@ package ara_pkg;
 
   // Ara Features.
 
+  // Fixed-point support
+  typedef enum logic {
+    FixedPointDisable = 1'b0,
+    FixedPointEnable  = 1'b1
+  } fixpt_support_e;
+
   // The three bits correspond to {RVVD, RVVF, RVVH}
   typedef enum logic [2:0] {
     FPUSupportNone             = 3'b000,
@@ -91,16 +97,17 @@ package ara_pkg;
 
   typedef logic [$clog2(MAXVL+1)-1:0] vlen_t;
   typedef logic [$clog2(NrVInsn)-1:0] vid_t;
-
   typedef logic [ELEN-1:0] elen_t;
 
   //////////////////
   //  Operations  //
   //////////////////
 
-  typedef enum logic [6:0] {
+  typedef enum logic [7:0] {
     // Arithmetic and logic instructions
     VADD, VSUB, VADC, VSBC, VRSUB, VMINU, VMIN, VMAXU, VMAX, VAND, VOR, VXOR,
+    // Fixed point
+    VSADDU, VSADD, VSSUBU, VSSUB, VAADDU, VAADD, VASUBU, VASUB, VSSRL, VSSRA, VNCLIP, VNCLIPU,
     // Shifts,
     VSLL, VSRL, VSRA, VNSRL, VNSRA,
     // Merge
@@ -111,6 +118,8 @@ package ara_pkg;
     VREDSUM, VREDAND, VREDOR, VREDXOR, VREDMINU, VREDMIN, VREDMAXU, VREDMAX, VWREDSUMU, VWREDSUM,
     // Mul/Mul-Add
     VMUL, VMULH, VMULHU, VMULHSU, VMACC, VNMSAC, VMADD, VNMSUB,
+    // Fixed point multiplication
+    VSMUL,
     // Div
     VDIVU, VDIV, VREMU, VREM,
     // FPU
@@ -836,6 +845,20 @@ package ara_pkg;
       end
     endcase
   endfunction : deshuffle_index
+
+  /////////////////////////
+  ////// Fixed-Point //////
+  /////////////////////////
+
+  typedef logic        vxsat_e;
+  typedef logic [1:0]  vxrm_t;
+
+  typedef union packed {
+    logic [0:0][7:0] w64;
+    logic [1:0][3:0] w32;
+    logic [3:0][1:0] w16;
+    logic [7:0][0:0] w8;
+  } vxsat_t;
 
   /////////////////////////
   //  MASKU definitions  //

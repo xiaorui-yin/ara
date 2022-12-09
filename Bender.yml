@@ -50,6 +50,7 @@ sources:
     - hardware/src/lane/operand_queues_stage.sv
     - hardware/src/lane/valu.sv
     - hardware/src/lane/vmfpu.sv
+    - hardware/src/lane/fixed_p_rounding.sv
     - hardware/src/vlsu/vlsu.sv
     - hardware/src/vlsu/bc_buffer.sv
     - hardware/src/lane/bc_operand_queue.sv

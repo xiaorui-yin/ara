@@ -13,6 +13,8 @@ module lane import ara_pkg::*; import rvv_pkg::*; #(
     parameter  int           unsigned NrLanes         = 1, // Number of lanes
     // Support for floating-point data types
     parameter  fpu_support_e          FPUSupport      = FPUSupportHalfSingleDouble,
+    // Support for fixed-point data types
+    parameter  logic                  FixPtSupport    = FixedPointEnable,
     parameter  int                    Lane0           = 0,
     // Dependant parameters. DO NOT CHANGE!
     // VRF Parameters
@@ -34,6 +36,8 @@ module lane import ara_pkg::*; import rvv_pkg::*; #(
     // Lane ID
     input  logic     [cf_math_pkg::idx_width(NrLanes)-1:0] lane_id_i,
     // Interface with the dispatcher
+    output logic                                           vxsat_flag_o,
+    input  vxrm_t                                          alu_vxrm_i,
     output logic     [4:0]                                 fflags_ex_o,
     output logic                                           fflags_ex_valid_o,
     // Interface with the sequencer
@@ -362,13 +366,17 @@ module lane import ara_pkg::*; import rvv_pkg::*; #(
   logic  bc_vmfpu_valid, bc_vmfpu_ready;
 
   vector_fus_stage #(
-    .NrLanes   (NrLanes   ),
-    .FPUSupport(FPUSupport),
-    .vaddr_t   (vaddr_t   )
+    .NrLanes     (NrLanes     ),
+    .FPUSupport  (FPUSupport  ),
+    .FixPtSupport(FixPtSupport),
+    .vaddr_t     (vaddr_t     )
   ) i_vfus (
     .clk_i                (clk_i                                  ),
     .rst_ni               (rst_ni                                 ),
     .lane_id_i            (lane_id_i                              ),
+    // Interface with Dispatcher
+    .vxsat_flag_o         (vxsat_flag_o                           ),
+    .alu_vxrm_i           (alu_vxrm_i                             ),
     // Interface with CVA6
     .fflags_ex_o          (fflags_ex_o                            ),
     .fflags_ex_valid_o    (fflags_ex_valid_o                      ),

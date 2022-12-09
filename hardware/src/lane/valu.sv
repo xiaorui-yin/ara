@@ -8,17 +8,22 @@
 // in a SIMD fashion, always operating on 64 bits.
 
 module valu import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::idx_width; #(
-    parameter  int  unsigned NrLanes   = 0,
+    parameter  int  unsigned NrLanes      = 0,
+    // Support for fixed-point data types
+    parameter  logic         FixPtSupport = FixedPointEnable,
     // Type used to address vector register file elements
-    parameter  type          vaddr_t   = logic,
+    parameter  type          vaddr_t      = logic,
     // Dependant parameters. DO NOT CHANGE!
-    localparam int  unsigned DataWidth = $bits(elen_t),
-    localparam int  unsigned StrbWidth = DataWidth/8,
-    localparam type          strb_t    = logic [StrbWidth-1:0]
+    localparam int  unsigned DataWidth    = $bits(elen_t),
+    localparam int  unsigned StrbWidth    = DataWidth/8,
+    localparam type          strb_t       = logic [StrbWidth-1:0]
   ) (
     input  logic                         clk_i,
     input  logic                         rst_ni,
     input  logic[idx_width(NrLanes)-1:0] lane_id_i,
+    // Interface with Dispatcher
+    output logic                         vxsat_flag_o,
+    input  vxrm_t                        alu_vxrm_i,
     // Interface with the lane sequencer
     input  vfu_operation_t               vfu_operation_i,
     input  logic                         vfu_operation_valid_i,
@@ -342,14 +347,41 @@ module valu import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::idx_width;
                         ? alu_state_q == SIMD_REDUCTION ? simd_red_operand : sldu_operand_q
                         : alu_operand_i[1];
 
+  ///////////////////
+  // Rounding Mode //
+  ///////////////////
+
+  strb_t r;
+
+  if (FixPtSupport == FixedPointEnable) begin
+    fixed_p_rounding i_fp_rounding (
+      .operand_a_i (alu_operand_a           ),
+      .operand_b_i (alu_operand_b           ),
+      .valid_i     (valu_valid              ),
+      .op_i        (vinsn_issue_q.op        ),
+      .vew_i       (vinsn_issue_q.vtype.vsew),
+      .vxrm_i      (alu_vxrm_i              ),
+      .r_o         (r                       )
+    );
+  end else begin
+    assign r = '0;
+  end
+
+  // Vector saturation flag validation signal
+
   ///////////////////////
   //  SIMD Vector ALU  //
   ///////////////////////
 
-  elen_t valu_result;
-  logic  valu_valid;
+  elen_t  valu_result;
+  logic   valu_valid;
+  vxsat_t alu_vxsat, alu_vxsat_q, alu_vxsat_d;
 
-  simd_alu i_simd_alu (
+  assign alu_vxsat_d = alu_vxsat;
+
+  simd_alu #(
+    .FixPtSupport      (FixPtSupport                                                    )
+  ) i_simd_alu (
     .operand_a_i       (alu_operand_a                                                   ),
     .operand_b_i       (alu_operand_b                                                   ),
     .valid_i           (valu_valid                                                      ),
@@ -358,6 +390,9 @@ module valu import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::idx_width;
     .narrowing_select_i(narrowing_select_q                                              ),
     .op_i              (vinsn_issue_q.op                                                ),
     .vew_i             (vinsn_issue_q.vtype.vsew                                        ),
+    .vxsat_o           (alu_vxsat                                                       ),
+    .vxrm_i            (alu_vxrm_i                                                      ),
+    .rm                (r                                                               ),
     .result_o          (valu_result                                                     )
   );
 
@@ -413,7 +448,6 @@ module valu import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::idx_width;
     ////////////////////////////////////////
     //  Write data into the result queue  //
     ////////////////////////////////////////
-
     if (vinsn_issue_valid || alu_state_q != NO_REDUCTION) begin
       case (alu_state_q)
         NO_REDUCTION: begin
@@ -711,6 +745,10 @@ module valu import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::idx_width;
     alu_result_id_o   = result_queue_q[result_queue_read_pnt_q].id;
     alu_result_be_o   = result_queue_q[result_queue_read_pnt_q].be;
 
+    // alu saturation calculation
+    if (|result_queue_valid_q)
+      vxsat_flag_o = |(alu_vxsat_q & result_queue_q[result_queue_read_pnt_q].be);
+
     // Received a grant from the VRF.
     // Deactivate the request.
     if (alu_result_gnt_i || mask_operand_gnt) begin
@@ -838,6 +876,7 @@ module valu import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::idx_width;
       red_hs_synch_q          <= 1'b0;
       simd_red_cnt_max_q      <= '0;
       alu_red_ready_q         <= 1'b0;
+      alu_vxsat_q             <= '0;
     end else begin
       issue_cnt_q             <= issue_cnt_d;
       commit_cnt_q            <= commit_cnt_d;
@@ -850,6 +889,7 @@ module valu import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::idx_width;
       red_hs_synch_q          <= red_hs_synch_d;
       simd_red_cnt_max_q      <= simd_red_cnt_max_d;
       alu_red_ready_q         <= alu_red_ready_i;
+      alu_vxsat_q             <= alu_vxsat_d;
     end
   end
 

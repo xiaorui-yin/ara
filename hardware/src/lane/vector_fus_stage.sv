@@ -8,18 +8,23 @@
 // of each lane, namely the ALU and the Multiplier/FPU.
 
 module vector_fus_stage import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::idx_width; #(
-    parameter  int           unsigned NrLanes    = 0,
+    parameter  int           unsigned NrLanes      = 0,
     // Support for floating-point data types
-    parameter  fpu_support_e          FPUSupport = FPUSupportHalfSingleDouble,
+    parameter  fpu_support_e          FPUSupport   = FPUSupportHalfSingleDouble,
+    // Support for fixed-point data types
+    parameter  logic                  FixPtSupport = FixedPointEnable,
     // Type used to address vector register file elements
-    parameter  type                   vaddr_t    = logic,
+    parameter  type                   vaddr_t      = logic,
     // Dependant parameters. DO NOT CHANGE!
-    localparam int           unsigned DataWidth  = $bits(elen_t),
-    localparam type                   strb_t     = logic [DataWidth/8-1:0]
+    localparam int           unsigned DataWidth    = $bits(elen_t),
+    localparam type                   strb_t       = logic [DataWidth/8-1:0]
   ) (
     input  logic                              clk_i,
     input  logic                              rst_ni,
     input  logic [idx_width(NrLanes)-1:0]     lane_id_i,
+    // Interface with Dispatcher
+    output logic                              vxsat_flag_o,
+    input  vxrm_t                             alu_vxrm_i,
     // Interface with CVA6
     output logic           [4:0]              fflags_ex_o,
     output logic                              fflags_ex_valid_o,
@@ -87,17 +92,25 @@ module vector_fus_stage import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg
   logic mfpu_mask_ready;
   assign mask_ready_o = alu_mask_ready | mfpu_mask_ready;
 
+  // saturation selection
+  logic alu_vxsat, mfpu_vxsat;
+  assign vxsat_flag_o = mfpu_vxsat | alu_vxsat;
+
   //////////////////
   //  Vector ALU  //
   //////////////////
 
   valu #(
     .NrLanes(NrLanes),
+    .FixPtSupport(FixPtSupport),
     .vaddr_t(vaddr_t)
   ) i_valu (
     .clk_i                (clk_i                          ),
     .rst_ni               (rst_ni                         ),
     .lane_id_i            (lane_id_i                      ),
+    // Interface with Dispatcher
+    .vxsat_flag_o         (alu_vxsat                      ),
+    .alu_vxrm_i           (alu_vxrm_i                     ),
     // Interface with the lane sequencer
     .vfu_operation_i      (vfu_operation_i                ),
     .vfu_operation_valid_i(vfu_operation_valid_i          ),
@@ -137,11 +150,15 @@ module vector_fus_stage import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg
   vmfpu #(
     .NrLanes   (NrLanes   ),
     .FPUSupport(FPUSupport),
+    .FixPtSupport(FixPtSupport),
     .vaddr_t   (vaddr_t   )
   ) i_vmfpu (
     .clk_i                (clk_i                           ),
     .rst_ni               (rst_ni                          ),
     .lane_id_i            (lane_id_i                       ),
+    // Interface with Dispatcher
+    .mfpu_vxsat_o         (mfpu_vxsat                      ),
+    .mfpu_vxrm_i          (alu_vxrm_i                      ),
     // Interface with CVA6
     .fflags_ex_o          (fflags_ex_o                     ),
     .fflags_ex_valid_o    (fflags_ex_valid_o               ),
