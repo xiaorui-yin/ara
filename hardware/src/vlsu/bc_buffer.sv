@@ -1,4 +1,8 @@
-// Author: Xioarui Yin
+// Copyright 2021 ETH Zurich and University of Bologna.
+// Solderpad Hardware License, Version 0.51, see LICENSE for details.
+// SPDX-License-Identifier: SHL-0.51
+//
+// Author: Xiaorui Yin <yinx@student.ethz.ch>
 // Description:
 // Broadcast buffer receives the data read by the load unit from L2 cache,
 // and send it to the first lane (lane0)

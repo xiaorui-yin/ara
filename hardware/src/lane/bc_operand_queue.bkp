@@ -1,3 +1,9 @@
+// Copyright 2021 ETH Zurich and University of Bologna.
+// Solderpad Hardware License, Version 0.51, see LICENSE for details.
+// SPDX-License-Identifier: SHL-0.51
+//
+// Author: Xiaorui Yin <yinx@student.ethz.ch>
+
 module bc_operand_queue import ara_pkg::*; #(
     parameter  int          Lane0      = 0,
     parameter  int unsigned NrLanes    = 0

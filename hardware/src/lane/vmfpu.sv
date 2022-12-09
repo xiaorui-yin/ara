@@ -1966,7 +1966,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
         commit_cnt_d = vinsn_queue_q.vinsn[vinsn_queue_d.commit_pnt].vl;
 
       // If we are reducing now, we will change state in MFPU_WAIT state during the next cycle
-      if (mfpu_state_q == NO_REDUCTION) begin
+      if (mfpu_state_q inside {NO_REDUCTION, BC_MAC}) begin
         // Initialize counters and vmfpu state if needed by the next instruction
         // After a reduction, the next instructions starts after the reduction commits
         if (is_reduction(vinsn_queue_q.vinsn[vinsn_queue_d.commit_pnt].op) && (vinsn_queue_d.issue_cnt != '0)) begin
@@ -1984,6 +1984,8 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
           intra_op_rx_cnt_d       = '0;
           osum_issue_cnt_d        = '0;
 
+          mfpu_state_d = next_mfpu_state(vinsn_queue_q.vinsn[vinsn_queue_d.issue_pnt].op);
+        end else if (vinsn_queue_d.issue_cnt != '0) begin
           mfpu_state_d = next_mfpu_state(vinsn_queue_q.vinsn[vinsn_queue_d.issue_pnt].op);
         end else begin
           mfpu_state_d = NO_REDUCTION;
