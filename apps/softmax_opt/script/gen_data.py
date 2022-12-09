@@ -67,7 +67,7 @@ def softmax(mat):
     return o
 
 
-(row, col) = (3, 256)
+(row, col) = (64, 64)
 transposed = 1
 
 # Generate inputs
@@ -85,4 +85,5 @@ print(".section .data,\"aw\",@progbits")
 emit("row", np.array(row, dtype=np.int32))
 emit("col", np.array(col, dtype=np.int32))
 emit("mat", mat.numpy().astype(np.float32), 'NR_LANES*32')
+emit("o", mat.numpy().astype(np.float32), 'NR_LANES*32')
 emit("o_gold", o_gold.numpy().astype(np.float32), 'NR_LANES*32')

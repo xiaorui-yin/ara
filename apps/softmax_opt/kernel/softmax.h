@@ -1,26 +1,28 @@
-// The APACHE License (APACHE)
-
-// Copyright (c) 2022 Xiaorui Yin. All rights reserved.
-
+// Copyright 2022 ETH Zurich and University of Bologna.
+//
+// SPDX-License-Identifier: Apache-2.0
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-
-//   http://www.apache.org/licenses/LICENSE-2.0
-
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// Author: Matteo Perotti <mperotti@iis.ee.ethz.ch>
 
-#ifndef LAYERNORM_H
-#define LAYERNORM_H
+#ifndef _SOFTMAX_H_
+#define _SOFTMAX_H_
 
-void layernorm(float *mat, float *alpha, float *beta, int row, int col);
+void softmax(const float *i, const float *o, uint64_t row,
+                 uint64_t col);
 
-void layernorm_t(float *mat, float *alpha, float *beta, int row, int col);
+void softmax_t(const float *i, const float *o, uint64_t row,
+                 uint64_t col);
 
-void layernorm_v2(float *mat, float *alpha, float *beta, int row, int col);
-
-#endif // !LAYERNORM_H
+#endif

@@ -25,8 +25,8 @@
 
 #include "runtime.h"
 
-extern const int row, col; // row & column size
-extern float mat[] __attribute__((aligned(32 * NR_LANES))); // matrix data (N x M) to normalize
+extern const int row, col;
+extern float mat[]    __attribute__((aligned(32 * NR_LANES)));
 extern float o_gold[] __attribute__((aligned(32 * NR_LANES)));
 
 int main() {
@@ -44,7 +44,8 @@ int main() {
 
 #ifndef SPIKE
   start_timer();
-  softmax(mat, row, col);
+  // softmax(mat, row, col);
+  softmax_transposed(mat, row, col);
   stop_timer();
   
   // Performance metrics
@@ -57,7 +58,8 @@ int main() {
   printf("The performance is %f SPFLOP/cycle (%f%% utilization).\n",
         performance, utilization);
 #else
-  softmax(mat, row, col);
+  softmax_transposed(mat, row, col);
+  // softmax(mat, row, col);
 #endif
   printf("Verifying result\n");
   compare_matrix(mat, o_gold, row, col);

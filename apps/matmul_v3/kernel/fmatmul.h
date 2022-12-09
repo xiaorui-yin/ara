@@ -22,51 +22,6 @@
 
 #include <stdint.h>
 
-void fmatmul(float *c, const float *a, const float *b, unsigned long int m,
-             unsigned long int n, unsigned long int p);
-
-void fmatmul_4x4(float *c, const float *a, const float *b,
-                 unsigned long int m, unsigned long int n, unsigned long int p);
-void fmatmul_vec_4x4_slice_init();
-void fmatmul_vec_4x4(float *c, const float *a, const float *b,
-                     unsigned long int n, unsigned long int p);
-
-void fmatmul_8x8(float *c, const float *a, const float *b,
-                 unsigned long int m, unsigned long int n, unsigned long int p);
-void fmatmul_vec_8x8_slice_init();
-void fmatmul_vec_8x8(float *c, const float *a, const float *b,
-                     unsigned long int n, unsigned long int p);
-
-void fmatmul_16x16(float *c, const float *a, const float *b,
-                   unsigned long int m, unsigned long int n,
-                   unsigned long int p);
-void fmatmul_vec_16x16_slice_init();
-void fmatmul_vec_16x16(float *c, const float *a, const float *b,
-                       unsigned long int n, unsigned long int p);
-
-void fmatmul_transpose(float *c, const float *a, const float *b, unsigned long int m,
-             unsigned long int n, unsigned long int p);
-void fmatmul_vec_16x16_transpose(float *c, const float *a, const float *b,
-                       unsigned long int m, unsigned long int n, unsigned long int p);
-
-void fmatmul_bias(float *c, const float *a, const float *b, const float *bias,
-             unsigned long int m, unsigned long int n, unsigned long int p);
-void fmatmul_vec_16x16_bias(float *c, const float *a, const float *b, const float *bias,
-             unsigned long int n, unsigned long int p);
-
-void fmatmul_bias_transpose(float *c, const float *a, const float *b, const float *bias, unsigned long int m,
-             unsigned long int n, unsigned long int p);
-void fmatmul_vec_16x16_bias_transpose(float *c, const float *a, const float *b, const float *bias,
-                       unsigned long int m, unsigned long int n, unsigned long int p);
-
-void fmatmul_add(float *c, const float *a, const float *b, const float *bias, const float *d,
-             unsigned long int m, unsigned long int n, unsigned long int p);
-void fmatmul_vec_16x16_add(float *c, const float *a, const float *b, const float *bias, const float *d,
-             unsigned long int n, unsigned long int p);
-
-void fmatmul_concate(float *c, const float *a, const float *b,
-                   unsigned long int m, unsigned long int n,
-                   unsigned long int p, const int d_model);
-void fmatmul_vec_16x16_concate(float *c, const float *a, const float *b,
-                       unsigned long int n, unsigned long int p, const int d_model);
+void fmatmul(float *c, const float *a, const float *b, const unsigned long int m,
+             const unsigned long int n, const unsigned long int p);
 #endif

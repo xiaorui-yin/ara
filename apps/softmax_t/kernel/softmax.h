@@ -19,4 +19,6 @@
 
 void softmax(float *mat, int row, int col);
 
+void softmax_transposed(float *mat, int row, int col);
+
 #endif // !SOFTMAX_H

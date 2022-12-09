@@ -15,8 +15,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# arg1: image size, arg2: filter size
-
 import numpy as np
 import sys
 import torch
@@ -33,8 +31,7 @@ def emit(name, array, alignment='NR_LANES*32'):
 			s += "%02x" % bs[i+3-n]
 		print("    .word 0x%s" % s)
 
-row = 512
-col = 1024
+(row, col, transpose) = (64, 768, True)
 
 # Generate inputs
 mat   = 3.14 * torch.randn((row, col))
@@ -43,17 +40,15 @@ alpha = 3.14 * torch.randn(col)
 # beta  = 3.14 * torch.randn(col)
 beta  = 314 * torch.ones(col)
 
-# mat   = torch.FloatTensor(row, col)
-
-# alpha = torch.FloatTensor(row, col)
-# beta  = torch.FloatTensor(row, col)
-
-# mean = mat.mean(-1, keepdim=True)
-# std = 1 / torch.sqrt(mat.var(-1, keepdim=True) + 0.00001) 
-
-
 kernel = LayerNorm(alpha, beta)
 o_gold = kernel(mat)
+
+if (transpose):
+    mat = torch.transpose(mat, 0, 1)
+    o_gold = torch.transpose(o_gold, 0, 1)
+    tmp = row
+    row = col
+    col = tmp
 
 print(".section .data,\"aw\",@progbits")
 emit("row", np.array(row, dtype=np.int32))
@@ -62,6 +57,3 @@ emit("mat", mat.numpy().astype(np.float32), 'NR_LANES*32')
 emit("alpha", alpha.numpy().astype(np.float32), 'NR_LANES*32')
 emit("beta", beta.numpy().astype(np.float32), 'NR_LANES*32')
 emit("o_gold", o_gold.numpy().astype(np.float32), 'NR_LANES*32')
-
-# emit("std", std.numpy().astype(np.float32), 'NR_LANES*32')
-# emit("mean", mean.numpy().astype(np.float32), 'NR_LANES*32')
