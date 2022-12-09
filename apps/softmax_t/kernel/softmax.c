@@ -1,23 +1,24 @@
 // The APACHE License (APACHE)
-// 
+//
 // Copyright (c) 2022 Xiaorui Yin. All rights reserved.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //   http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Softermax: Hardware/Software Co-Design of an Efficient Softmax for Transformers
+// Softermax: Hardware/Software Co-Design of an Efficient Softmax for
+// Transformers
 
-#include "riscv_vector.h"
 #include "exp.h"
+#include "riscv_vector.h"
 
 void softmax(float *mat, int row, int col) {
   size_t vlmax = vsetvlmax_e32m1();
@@ -26,7 +27,8 @@ void softmax(float *mat, int row, int col) {
 
   for (int i = 0; i < row;) {
     int vl = vlmax;
-    if (i + vlmax > row) vl = vsetvl_e32m1(row - i);
+    if (i + vlmax > row)
+      vl = vsetvl_e32m1(row - i);
 
     // =================================================
     // update max and sum
@@ -51,7 +53,7 @@ void softmax(float *mat, int row, int col) {
       tmp_vec = vfsub_vv_f32m1(cur_max, next_max, vl);
       tmp_vec = __exp_2xf32(tmp_vec, vl);
 
-      // sum[j] = exp(x - m[j]) + sum[j-1] * exp(m[j] - m[j-1]) 
+      // sum[j] = exp(x - m[j]) + sum[j-1] * exp(m[j] - m[j-1])
       next_sum = vfmul_vv_f32m1(cur_sum, tmp_vec, vl);
 
       next_sum = vfadd_vv_f32m1(next_sum, vec, vl);
@@ -89,7 +91,8 @@ void softmax_transposed(float *mat, int row, int col) {
 
   for (int i = 0; i < col;) {
     int vl = vlmax;
-    if (i + vlmax > col) vl = vsetvl_e32m1(col- i);
+    if (i + vlmax > col)
+      vl = vsetvl_e32m1(col - i);
 
     // =================================================
     // update max and sum
@@ -114,7 +117,7 @@ void softmax_transposed(float *mat, int row, int col) {
       tmp_vec = vfsub_vv_f32m1(cur_max, next_max, vl);
       tmp_vec = __exp_2xf32(tmp_vec, vl);
 
-      // sum[j] = exp(x - m[j]) + sum[j-1] * exp(m[j] - m[j-1]) 
+      // sum[j] = exp(x - m[j]) + sum[j-1] * exp(m[j] - m[j-1])
       next_sum = vfmul_vv_f32m1(cur_sum, tmp_vec, vl);
 
       next_sum = vfadd_vv_f32m1(next_sum, vec, vl);
@@ -143,4 +146,3 @@ void softmax_transposed(float *mat, int row, int col) {
     i += vl;
   }
 }
-

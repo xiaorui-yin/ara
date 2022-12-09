@@ -22,6 +22,12 @@
 
 #include <stdint.h>
 
-void fmatmul(float *c, const float *a, const float *b, const unsigned long int m,
-             const unsigned long int n, const unsigned long int p);
+void fmatmul(float *c, const float *a, const float *b,
+             const unsigned long int m, const unsigned long int n,
+             const unsigned long int p);
+
+void fmatmul_bias(float *c, const float *a, const float *b, const float *bias,
+                  const unsigned long int m, const unsigned long int n,
+                  const unsigned long int p);
+
 #endif

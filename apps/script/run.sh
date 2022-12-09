@@ -45,7 +45,7 @@ compile_matmul_old 512 768 64 4
 compile_matmul_old 64 1024 64 4
 compile_matmul_old 64 1280 80 4
 
-# Nr Lanes 
+# Nr Lanes
 compile_matmul_old 64 768 64 8
 compile_matmul_old 64 768 64 16
 
@@ -75,7 +75,7 @@ compile_matmul_old 512 768 64 4
 compile_matmul_old 64 1024 64 4
 compile_matmul_old 64 1280 80 4
 
-# Nr Lanes 
+# Nr Lanes
 compile_matmul_old 64 768 64 8
 compile_matmul_old 64 768 64 16
 
@@ -87,4 +87,3 @@ compile_matmul 512 768 64 4
 # Model Size
 compile_matmul 64 1024 64 4
 compile_matmul 64 1280 80 4
-

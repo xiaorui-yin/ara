@@ -536,16 +536,14 @@ void fmatmul_vec_16x16(float *c, const float *a, const float *b,
   asm volatile("vse32.v v15, (%0);" ::"r"(c));
 }
 
-
-
 // =================================================
-// MatMul followed by a transpose operation 
+// MatMul followed by a transpose operation
 // (A * B)^T
 // =================================================
 
 void fmatmul_transpose(float *c, const float *a, const float *b,
-             const unsigned long int M, const unsigned long int N,
-             const unsigned long int P) {
+                       const unsigned long int M, const unsigned long int N,
+                       const unsigned long int P) {
   // We work on 4 rows of the matrix at once
   const unsigned long int block_size = 16;
   unsigned long int block_size_p;
@@ -577,8 +575,9 @@ void fmatmul_transpose(float *c, const float *a, const float *b,
 }
 
 void fmatmul_vec_16x16_transpose(float *c, const float *a, const float *b,
-                       const unsigned long int M, const unsigned long int N,
-                       const unsigned long int P) {
+                                 const unsigned long int M,
+                                 const unsigned long int N,
+                                 const unsigned long int P) {
   // Temporary variables
   float t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14, t15;
 
@@ -768,8 +767,8 @@ void fmatmul_vec_16x16_transpose(float *c, const float *a, const float *b,
 // =================================================
 
 void fmatmul_bias(float *c, const float *a, const float *b, const float *bias,
-                   unsigned long int M, unsigned long int N,
-                   unsigned long int P) {
+                  unsigned long int M, unsigned long int N,
+                  unsigned long int P) {
   // We work on 4 rows of the matrix at once
   const unsigned long int block_size = 16;
   unsigned long int block_size_p;
@@ -801,8 +800,9 @@ void fmatmul_bias(float *c, const float *a, const float *b, const float *bias,
   }
 }
 
-void fmatmul_vec_16x16_bias(float *c, const float *a, const float *b, const float *bias,
-                       const unsigned long int N, const unsigned long int P) {
+void fmatmul_vec_16x16_bias(float *c, const float *a, const float *b,
+                            const float *bias, const unsigned long int N,
+                            const unsigned long int P) {
   // Temporary variables
   float t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14, t15;
 
@@ -826,7 +826,6 @@ void fmatmul_vec_16x16_bias(float *c, const float *a, const float *b, const floa
   t13 = *a, a += N;
   t14 = *a, a += N;
   t15 = *a;
-
 
   // Prefetch one row of matrix B
   asm volatile("vle32.v v16, (%0);" ::"r"(b));
@@ -993,9 +992,9 @@ void fmatmul_vec_16x16_bias(float *c, const float *a, const float *b, const floa
 // MatMul followed by a MatAdd (A * B + D)
 // =================================================
 
-void fmatmul_add(float *c, const float *a, const float *b, const float *bias, const float *d,
-                   unsigned long int M, unsigned long int N,
-                   unsigned long int P) {
+void fmatmul_add(float *c, const float *a, const float *b, const float *bias,
+                 const float *d, unsigned long int M, unsigned long int N,
+                 unsigned long int P) {
   // We work on 4 rows of the matrix at once
   const unsigned long int block_size = 16;
   unsigned long int block_size_p;
@@ -1029,8 +1028,10 @@ void fmatmul_add(float *c, const float *a, const float *b, const float *bias, co
   }
 }
 
-void fmatmul_vec_16x16_add(float *c, const float *a, const float *b, const float *bias, const float *d,
-                       const unsigned long int N, const unsigned long int P) {
+void fmatmul_vec_16x16_add(float *c, const float *a, const float *b,
+                           const float *bias, const float *d,
+                           const unsigned long int N,
+                           const unsigned long int P) {
   // Temporary variables
   float t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14, t15;
 
@@ -1054,7 +1055,6 @@ void fmatmul_vec_16x16_add(float *c, const float *a, const float *b, const float
   t13 = *a, a += N;
   t14 = *a, a += N;
   t15 = *a;
-
 
   // Prefetch one row of matrix B
   asm volatile("vle32.v v16, (%0);" ::"r"(b));
@@ -1269,14 +1269,14 @@ void fmatmul_vec_16x16_add(float *c, const float *a, const float *b, const float
 }
 
 // =================================================
-// Special MatMul for self-attention (store result 
+// Special MatMul for self-attention (store result
 // in the position after concatenation)
-// d_model: column size of the 'big' matrix 
+// d_model: column size of the 'big' matrix
 // =================================================
 
 void fmatmul_concate(float *c, const float *a, const float *b,
-                   unsigned long int M, unsigned long int N,
-                   unsigned long int P, const int d_model) {
+                     unsigned long int M, unsigned long int N,
+                     unsigned long int P, const int d_model) {
   // We work on 4 rows of the matrix at once
   const unsigned long int block_size = 16;
   unsigned long int block_size_p;
@@ -1308,7 +1308,8 @@ void fmatmul_concate(float *c, const float *a, const float *b,
 }
 
 void fmatmul_vec_16x16_concate(float *c, const float *a, const float *b,
-                       const unsigned long int N, const unsigned long int P, const int d_model) {
+                               const unsigned long int N,
+                               const unsigned long int P, const int d_model) {
   // Temporary variables
   float t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14, t15;
 
@@ -1480,9 +1481,9 @@ void fmatmul_vec_16x16_concate(float *c, const float *a, const float *b,
 // MatMul with bias, and transpose the result
 // =================================================
 
-void fmatmul_bias_transpose(float *c, const float *a, const float *b, const float *bias,
-                   unsigned long int M, unsigned long int N,
-                   unsigned long int P) {
+void fmatmul_bias_transpose(float *c, const float *a, const float *b,
+                            const float *bias, unsigned long int M,
+                            unsigned long int N, unsigned long int P) {
   // We work on 4 rows of the matrix at once
   const unsigned long int block_size = 16;
   unsigned long int block_size_p;
@@ -1514,8 +1515,11 @@ void fmatmul_bias_transpose(float *c, const float *a, const float *b, const floa
   }
 }
 
-void fmatmul_vec_16x16_bias_transpose(float *c, const float *a, const float *b, const float *bias,
-                       const unsigned long int M, const unsigned long int N, const unsigned long int P) {
+void fmatmul_vec_16x16_bias_transpose(float *c, const float *a, const float *b,
+                                      const float *bias,
+                                      const unsigned long int M,
+                                      const unsigned long int N,
+                                      const unsigned long int P) {
   // Temporary variables
   float t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14, t15;
 
@@ -1539,7 +1543,6 @@ void fmatmul_vec_16x16_bias_transpose(float *c, const float *a, const float *b, 
   t13 = *a, a += N;
   t14 = *a, a += N;
   t15 = *a;
-
 
   // Prefetch one row of matrix B
   asm volatile("vle32.v v16, (%0);" ::"r"(b));
@@ -1636,7 +1639,7 @@ void fmatmul_vec_16x16_bias_transpose(float *c, const float *a, const float *b, 
     t15 = *a;
   }
 
-  int stride = 4 * M; 
+  int stride = 4 * M;
   // Last iteration: store results after add bias
   // asm volatile("vfmacc.vf v0, %0, v17" ::"f"(t0));
   asm volatile("vfadd.vv v0, v0, v18");

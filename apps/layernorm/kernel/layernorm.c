@@ -1,13 +1,13 @@
 // The APACHE License (APACHE)
-// 
+//
 // Copyright (c) 2022 Xiaorui Yin. All rights reserved.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //   http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -23,8 +23,9 @@ void layernorm(float *mat, float *alpha, float *beta, int row, int col) {
 
   for (int i = 0; i < row;) {
     int vl = vlmax;
-    //if (i + vlmax > row) vl = row - i;
-    if (i + vlmax > row) vl = vsetvl_e32m1(row - i);
+    // if (i + vlmax > row) vl = row - i;
+    if (i + vlmax > row)
+      vl = vsetvl_e32m1(row - i);
 
     // =================================================
     // mean calculation
@@ -33,7 +34,8 @@ void layernorm(float *mat, float *alpha, float *beta, int row, int col) {
 
     for (int j = 0; j < col; j++) {
       // stride load: mat[i][j] ~ mat[i+vl][j]
-      // NOTE: for strided store/load, the stride size is in byte (float32: 4 byte)
+      // NOTE: for strided store/load, the stride size is in byte (float32: 4
+      // byte)
       vfloat32m1_t vec = vlse32_v_f32m1(&mat[i * col + j], col * 4, vl);
 
       // partial sum aggregation
@@ -45,7 +47,7 @@ void layernorm(float *mat, float *alpha, float *beta, int row, int col) {
     // =================================================
     // variance calculation
     // =================================================
-    var= vfmv_v_f_f32m1(0.00001, vl);
+    var = vfmv_v_f_f32m1(0.00001, vl);
 
     for (int j = 0; j < col; j++) {
       vfloat32m1_t vec_x = vlse32_v_f32m1(&mat[i * col + j], col * 4, vl);
@@ -90,7 +92,8 @@ void layernorm_t(float *mat, float *alpha, float *beta, int row, int col) {
 
   for (int i = 0; i < col;) {
     int vl = vlmax;
-    if (i + vlmax > col) vl = vsetvl_e32m1(col- i);
+    if (i + vlmax > col)
+      vl = vsetvl_e32m1(col - i);
 
     // =================================================
     // mean calculation
@@ -156,8 +159,9 @@ void layernorm_v2(float *mat, float *alpha, float *beta, int row, int col) {
 
   for (int i = 0; i < row;) {
     int vl = vlmax;
-    //if (i + vlmax > row) vl = row - i;
-    if (i + vlmax > row) vl = vsetvl_e32m1(row - i);
+    // if (i + vlmax > row) vl = row - i;
+    if (i + vlmax > row)
+      vl = vsetvl_e32m1(row - i);
 
     // =================================================
     // mean and variance calculation
@@ -167,13 +171,14 @@ void layernorm_v2(float *mat, float *alpha, float *beta, int row, int col) {
 
     for (int j = 0; j < col; j++) {
       // stride load: mat[i][j] ~ mat[i+vl][j]
-      // NOTE: for strided store/load, the stride size is in byte (float32: 4 byte)
+      // NOTE: for strided store/load, the stride size is in byte (float32: 4
+      // byte)
       vfloat32m1_t vec = vlse32_v_f32m1(&mat[i * col + j], col * 4, vl);
 
       // partial sum aggregation
       // mean = (mean + vec) / current_length
       tmp_mean = vfadd_vv_f32m1(tmp_mean, vec, vl);
-      tmp_mean = vfdiv_vf_f32m1(tmp_mean, j+1, vl);
+      tmp_mean = vfdiv_vf_f32m1(tmp_mean, j + 1, vl);
 
       // var = var + (x - current_mean)^2
       tmp_vec = vfsub_vv_f32m1(vec, tmp_mean, vl);
@@ -194,11 +199,12 @@ void layernorm_v2(float *mat, float *alpha, float *beta, int row, int col) {
     // apply to the elements
     // =================================================
     for (int j = 0; j < col; j++) {
-      vfloat32m1_t vec_var   = vle32_v_f32m1(&var[i], vl);
-      vfloat32m1_t vec_mean  = vle32_v_f32m1(&mean[i], vl);
-      vfloat32m1_t vec_x     = vlse32_v_f32m1(&mat[i * col + j], col * 4, vl);
-      // vfloat32m1_t vec_alpha = vlse32_v_f32m1(&alpha[i * col + j], col * 4, vl);
-      // vfloat32m1_t vec_beta  = vlse32_v_f32m1(&beta[i * col + j], col * 4, vl);
+      vfloat32m1_t vec_var = vle32_v_f32m1(&var[i], vl);
+      vfloat32m1_t vec_mean = vle32_v_f32m1(&mean[i], vl);
+      vfloat32m1_t vec_x = vlse32_v_f32m1(&mat[i * col + j], col * 4, vl);
+      // vfloat32m1_t vec_alpha = vlse32_v_f32m1(&alpha[i * col + j], col * 4,
+      // vl); vfloat32m1_t vec_beta  = vlse32_v_f32m1(&beta[i * col + j], col *
+      // 4, vl);
 
       tmp_vec = vfsub_vv_f32m1(vec_x, vec_mean, vl);
       tmp_vec = vfmul_vv_f32m1(vec_x, vec_var, vl);
@@ -210,4 +216,3 @@ void layernorm_v2(float *mat, float *alpha, float *beta, int row, int col) {
     i += vl;
   }
 }
-

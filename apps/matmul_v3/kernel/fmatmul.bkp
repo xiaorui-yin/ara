@@ -30,7 +30,7 @@ void fmatmul(float *c, const float *a, const float *b, const unsigned long int M
 
     // Iterate over the rows
     for (unsigned long int m = 0; m < M; m += block_size_m) {
-      
+ 
       // Set the vector length
       const unsigned long int m_ = MIN(M - m, block_size_m);
       asm volatile("vsetvli zero, %0, e32, m1, ta, ma" ::"r"(m_));

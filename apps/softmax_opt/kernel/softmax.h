@@ -19,10 +19,8 @@
 #ifndef _SOFTMAX_H_
 #define _SOFTMAX_H_
 
-void softmax(const float *i, const float *o, uint64_t row,
-                 uint64_t col);
+void softmax(const float *i, const float *o, uint64_t row, uint64_t col);
 
-void softmax_t(const float *i, const float *o, uint64_t row,
-                 uint64_t col);
+void softmax_t(const float *i, const float *o, uint64_t row, uint64_t col);
 
 #endif

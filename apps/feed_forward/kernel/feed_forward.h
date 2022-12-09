@@ -19,13 +19,14 @@
 /*
   input:
   x: input matrix from multihead self-attention, n x d_mdoel
-  w1, w2: weight matrices for liner transformation, d_model x d_ff, d_ff x d_model
-  alpha, beta: layer normalization parameters
+  w1, w2: weight matrices for liner transformation, d_model x d_ff, d_ff x
+  d_model alpha, beta: layer normalization parameters
 
   output:
   o = ((activation(x * w1).dropout()) * w2 + x).layernorm()
 */
-void feed_forward(float *x, float *o, float *w1, float *bias_1, float *w2, float *bias_2,
-                    float *alpha, float *beta, int *sel, const float scale, const int n, const int d_model);
+void feed_forward(float *x, float *o, float *w1, float *bias_1, float *w2,
+                  float *bias_2, float *alpha, float *beta, int *sel,
+                  const float scale, const int n, const int d_model);
 
 #endif // !FEED_FORWARD_H

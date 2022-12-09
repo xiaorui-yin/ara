@@ -26,10 +26,10 @@ include $(COMMON_DIR)/runtime.mk
 include $(COMMON_DIR)/riscv_tests.mk
 include $(COMMON_DIR)/default_args.mk
 
-APPS := $(patsubst $(APPS_DIR)/%/main.c,%,$(shell find $(APPS_DIR) -name "main.c"))
+SKIP_APPS = "utils|layernorm|softmax_opt|softmax_t|dropout_t|transformer|self_attention|multihead_attention|relu|matmul|matmul_v2|matmul_v3|feed_forward|test"
+APPS := $(patsubst $(APPS_DIR)/%/main.c,%,$(shell find $(APPS_DIR) -name "main.c" | egrep -v $(SKIP_APPS)))
 # Don't automatically compile the benchmark app, which is only a wrapper around the other apps
-skip = bin/benchmarks bin/softmax_t bin/dropout_t bin/transformer bin/self_attention bin/multihead_attention bin/relu bin/matmul bin/matmul_v2 bin/matmul_v3 bin/feed_forward bin/test
-BINARIES := $(filter-out ${skip}, $(addprefix bin/,$(APPS)))
+BINARIES := $(filter-out bin/benchmarks, $(addprefix bin/,$(APPS)))
 
 CVA6_EXTENSIONS := rv64ui rv64uc rv64um rv64uf rv64ud rv64si
 # Atomics are messy, since there is currently no memory region capable of handling them

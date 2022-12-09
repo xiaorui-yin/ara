@@ -27,8 +27,7 @@
 // The following macro is just a trick and should NOT be used
 #define RESET_VREGS
 
-void softmax(const float *i, const float *o, uint64_t row,
-                 uint64_t col) {
+void softmax(const float *i, const float *o, uint64_t row, uint64_t col) {
 
   /* ONLY FOR DEBUGGING PURPOSE. DELETE THE FOLLOWING ASM LINES
    */
@@ -132,8 +131,7 @@ void softmax(const float *i, const float *o, uint64_t row,
   }
 }
 
-void softmax_t(const float *i, const float *o, uint64_t row,
-                 uint64_t col) {
+void softmax_t(const float *i, const float *o, uint64_t row, uint64_t col) {
 
   /* ONLY FOR DEBUGGING PURPOSE. DELETE THE FOLLOWING ASM LINES
    */

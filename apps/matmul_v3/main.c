@@ -25,15 +25,15 @@
 #include "runtime.h"
 
 extern const int dim1, dim2, dim3; // row & column size
-extern float mat_a[]  __attribute__((aligned(32 * NR_LANES)));
-extern float mat_b[]  __attribute__((aligned(32 * NR_LANES)));
-extern float mat_c[]  __attribute__((aligned(32 * NR_LANES)));
-extern float bias[]   __attribute__((aligned(32 * NR_LANES)));
+extern float mat_a[] __attribute__((aligned(32 * NR_LANES)));
+extern float mat_b[] __attribute__((aligned(32 * NR_LANES)));
+extern float mat_c[] __attribute__((aligned(32 * NR_LANES)));
+extern float bias[] __attribute__((aligned(32 * NR_LANES)));
 extern float o_gold[] __attribute__((aligned(32 * NR_LANES)));
-extern float o[]      __attribute__((aligned(32 * NR_LANES)));
-extern float o_t[]    __attribute__((aligned(32 * NR_LANES)));
-extern float o_b[]    __attribute__((aligned(32 * NR_LANES)));
-extern float o_a[]    __attribute__((aligned(32 * NR_LANES)));
+extern float o[] __attribute__((aligned(32 * NR_LANES)));
+extern float o_t[] __attribute__((aligned(32 * NR_LANES)));
+extern float o_b[] __attribute__((aligned(32 * NR_LANES)));
+extern float o_a[] __attribute__((aligned(32 * NR_LANES)));
 
 int main() {
   printf("\n");

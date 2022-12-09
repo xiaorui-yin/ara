@@ -20,16 +20,16 @@
 /*
   input:
   x: input token sequence of output from previous layer, n x d_model
-  wq, wk, wv: weight matrices, to store it contiguously in memory, the size is (d_model*h) x dk
-  q/k/v_bias: bias matrices, same size as weight
-  wo: d_model x d_model
-  alpha, beta: layernorm parameters
+  wq, wk, wv: weight matrices, to store it contiguously in memory, the size is
+  (d_model*h) x dk q/k/v_bias: bias matrices, same size as weight wo: d_model x
+  d_model alpha, beta: layernorm parameters
 
   output:
   multihead_attn: n x d_model
 */
-void multihead_attention(float *x, float* multihead_attn, float *wq, float *q_bias, float *wk, float *k_bias, 
-                         float *wv, float *v_bias, float *wo, float *o_bias, float *alpha, float *beta,
-                         int n, int d_model, int h);
+void multihead_attention(float *x, float *multihead_attn, float *wq,
+                         float *q_bias, float *wk, float *k_bias, float *wv,
+                         float *v_bias, float *wo, float *o_bias, float *alpha,
+                         float *beta, int n, int d_model, int h);
 
 #endif // !MULTIHEAD_ATTENTION_H

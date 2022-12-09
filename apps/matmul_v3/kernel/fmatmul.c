@@ -7,9 +7,11 @@
 // 16x16
 // ---------------
 
-// Matrix A is transposed, (N x M), and the result matrix C is also transposed (P x M)
-void fmatmul(float *c, const float *a, const float *b, const unsigned long int M,
-             const unsigned long int N, const unsigned long int P) {
+// Matrix A is transposed, (N x M), and the result matrix C is also transposed
+// (P x M)
+void fmatmul(float *c, const float *a, const float *b,
+             const unsigned long int M, const unsigned long int N,
+             const unsigned long int P) {
   const int REUSE_SIZE = 4;
   const int stride_c = 4 * M;
   // We work on 64 elements of the matrix B at once
@@ -30,7 +32,7 @@ void fmatmul(float *c, const float *a, const float *b, const unsigned long int M
 
     // Iterate over the rows
     for (unsigned long int m = 0; m < M; m += block_size_m) {
-      
+
       // Set the vector length
       const unsigned long int m_ = MIN(M - m, block_size_m);
       asm volatile("vsetvli zero, %0, e32, m1, ta, ma" ::"r"(m_));
@@ -70,9 +72,12 @@ void fmatmul(float *c, const float *a, const float *b, const unsigned long int M
 
       asm volatile("vsetvli zero, %0, e32, m1, ta, ma" ::"r"(p_ * NR_LANES));
       asm volatile("vsse32.v v8, (%0), %1" ::"r"(c__), "r"(stride_c));
-      asm volatile("vsse32.v v9, (%0), %1" ::"r"(c__ + NR_LANES), "r"(stride_c));
-      asm volatile("vsse32.v v10, (%0), %1" ::"r"(c__ + 2 * NR_LANES), "r"(stride_c));
-      asm volatile("vsse32.v v11, (%0), %1" ::"r"(c__ + 3 * NR_LANES), "r"(stride_c));
+      asm volatile("vsse32.v v9, (%0), %1" ::"r"(c__ + NR_LANES),
+                   "r"(stride_c));
+      asm volatile("vsse32.v v10, (%0), %1" ::"r"(c__ + 2 * NR_LANES),
+                   "r"(stride_c));
+      asm volatile("vsse32.v v11, (%0), %1" ::"r"(c__ + 3 * NR_LANES),
+                   "r"(stride_c));
     }
   }
 }
