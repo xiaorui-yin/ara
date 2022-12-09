@@ -18,6 +18,23 @@ module bc_operand_queue import ara_pkg::*; #(
     output logic                           bc_vmfpu_valid_o
   );
 
+  elen_t bc_data;
+  logic  bc_valid, bc_ready;
+
+  spill_register #(
+    .T(elen_t),
+    .Bypass(Lane0)
+  ) i_bc_spill_register (
+    .clk_i  (clk_i             ),
+    .rst_ni (rst_ni            ),
+    .valid_i(bc_valid_i    ),
+    .ready_o(bc_ready_o    ),
+    .data_i (bc_data_i     ),
+    .valid_o(bc_valid  ),
+    .ready_i(bc_ready  ),
+    .data_o (bc_data   )
+  );
+
   logic  bc_op_buffer_push, bc_op_buffer_pop;
   logic  bc_op_buffer_full, bc_op_buffer_empty;
 
@@ -31,7 +48,7 @@ module bc_operand_queue import ara_pkg::*; #(
     .rst_ni    (rst_ni             ),
     .flush_i   (1'b0               ),
     .testmode_i(1'b0               ),
-    .data_i    (bc_data_i          ),
+    .data_i    (bc_data          ),
     .push_i    (bc_op_buffer_push  ),
     .full_o    (bc_op_buffer_full  ),
     .data_o    (bc_data_o          ),
@@ -40,41 +57,25 @@ module bc_operand_queue import ara_pkg::*; #(
     .usage_o   (/* Unused*/        )
   );
 
-  elen_t bc_vmfpu_data;
-  logic  bc_vmfpu_valid, bc_vmfpu_ready;
 
-  spill_register #(
-    .T(elen_t),
-    .Bypass(Lane0)
-  ) i_bc_spill_register (
-    .clk_i  (clk_i             ),
-    .rst_ni (rst_ni            ),
-    .valid_i(bc_vmfpu_valid    ),
-    .ready_o(bc_vmfpu_ready    ),
-    .data_i (bc_vmfpu_data     ),
-    .valid_o(bc_vmfpu_valid_o  ),
-    .ready_i(bc_vmfpu_ready_i  ),
-    .data_o (bc_vmfpu_data_o   )
-  );
-
-  assign bc_vmfpu_data = bc_data_i;
+  assign bc_vmfpu_data_o = bc_data;
   assign bc_valid_o      = ~bc_op_buffer_empty;
 
   always_comb begin
-    bc_ready_o = 1'b0;
+    bc_ready = 1'b0;
     bc_op_buffer_push = 1'b0;
     bc_op_buffer_pop = 1'b0;
 
-    bc_vmfpu_valid = 1'b0;//bc_valid_i;
+    bc_vmfpu_valid_o = 1'b0;
 
     data_stored_d = data_stored_q;
 
-    if (bc_valid_i && ~bc_op_buffer_full && ~data_stored_q) begin
-      bc_vmfpu_valid = 1'b1;
+    if (bc_valid && ~bc_op_buffer_full && ~data_stored_q) begin
+      bc_vmfpu_valid_o = 1'b1;
       bc_op_buffer_push = 1'b1;
-      if (bc_vmfpu_ready) begin
+      if (bc_vmfpu_ready_i) begin
         // Ackownledge the data
-        bc_ready_o = 1'b1;
+        bc_ready = 1'b1;
       end else begin
         // current lane is not ready
         // Mark this data as stored
@@ -83,11 +84,11 @@ module bc_operand_queue import ara_pkg::*; #(
     end
 
     if (data_stored_q) begin
-      bc_vmfpu_valid = 1'b1;
+      bc_vmfpu_valid_o = 1'b1;
       // Clear if last data is stored
-      if (bc_vmfpu_ready) begin
+      if (bc_vmfpu_ready_i) begin
         data_stored_d = 1'b0;
-        bc_ready_o = 1'b1;
+        bc_ready = 1'b1;
       end
     end
 

@@ -21,88 +21,71 @@ module bc_operand_queue import ara_pkg::*; #(
   elen_t bc_data;
   logic  bc_valid, bc_ready;
 
-  spill_register #(
-    .T(elen_t),
-    .Bypass(Lane0)
-  ) i_bc_spill_register (
-    .clk_i  (clk_i             ),
-    .rst_ni (rst_ni            ),
-    .valid_i(bc_valid_i    ),
-    .ready_o(bc_ready_o    ),
-    .data_i (bc_data_i     ),
-    .valid_o(bc_valid  ),
-    .ready_i(bc_ready  ),
-    .data_o (bc_data   )
-  );
+  if (!Lane0) begin : gen_bc_op_fifo
+    stream_fifo #(
+      .DEPTH       (2               ),
+      .T           (elen_t          )
+    ) i_bc_op_fifo(
+      .clk_i       (clk_i           ),
+      .rst_ni      (rst_ni          ),
+      .flush_i     (1'b0            ),
+      .testmode_i  (1'b0            ),
+      .data_i      (bc_data_i       ),
+      .valid_i     (bc_valid_i      ),
+      .ready_o     (bc_ready_o      ),
+      .data_o      (bc_data         ),
+      .valid_o     (bc_valid        ),
+      .ready_i     (bc_ready        ),
+      .usage_o     (/* Unused */    )
+    );
+  end else begin : gen_fall_through
+    assign bc_data    = bc_data_i;
+    assign bc_valid   = bc_valid_i;
+    assign bc_ready_o = bc_ready;
+  end
 
-  logic  bc_op_buffer_push, bc_op_buffer_pop;
-  logic  bc_op_buffer_full, bc_op_buffer_empty;
+  logic  data_used_d, data_used_q;
 
-  logic data_stored_d, data_stored_q;
-
-  fifo_v3 #(
-    .DEPTH(2     ),
-    .dtype(elen_t)
-  ) i_bc_op_buffer(
-    .clk_i     (clk_i              ),
-    .rst_ni    (rst_ni             ),
-    .flush_i   (1'b0               ),
-    .testmode_i(1'b0               ),
-    .data_i    (bc_data          ),
-    .push_i    (bc_op_buffer_push  ),
-    .full_o    (bc_op_buffer_full  ),
-    .data_o    (bc_data_o          ),
-    .pop_i     (bc_op_buffer_pop   ),
-    .empty_o   (bc_op_buffer_empty ),
-    .usage_o   (/* Unused*/        )
-  );
-
-
-  assign bc_vmfpu_data_o = bc_data;
-  assign bc_valid_o      = ~bc_op_buffer_empty;
+  assign bc_vmfpu_data_o  = bc_data;
+  assign bc_data_o        = bc_data;
 
   always_comb begin
-    bc_ready = 1'b0;
-    bc_op_buffer_push = 1'b0;
-    bc_op_buffer_pop = 1'b0;
+    bc_vmfpu_valid_o = bc_valid;
+    bc_valid_o       = 1'b0;
+    bc_ready         = 1'b0;
 
-    bc_vmfpu_valid_o = 1'b0;
+    data_used_d      = data_used_q;
 
-    data_stored_d = data_stored_q;
-
-    if (bc_valid && ~bc_op_buffer_full && ~data_stored_q) begin
-      bc_vmfpu_valid_o = 1'b1;
-      bc_op_buffer_push = 1'b1;
-      if (bc_vmfpu_ready_i) begin
-        // Ackownledge the data
-        bc_ready = 1'b1;
+    // The FPU is ready
+    if (bc_valid && bc_vmfpu_ready_i && ~data_used_q) begin
+      // The next lane is not ready (FIFO full)
+      if (~bc_ready_i) begin
+        // Don't ackownledge, but mark this data as used
+        data_used_d = 1'b1;
       end else begin
-        // current lane is not ready
-        // Mark this data as stored
-        data_stored_d = 1'b1;
+        bc_valid_o  = 1'b1;
+        bc_ready    = 1'b1;
       end
     end
 
-    if (data_stored_q) begin
-      bc_vmfpu_valid_o = 1'b1;
-      // Clear if last data is stored
-      if (bc_vmfpu_ready_i) begin
-        data_stored_d = 1'b0;
-        bc_ready = 1'b1;
+    if (data_used_q) begin
+      // The data is used
+      bc_vmfpu_valid_o = 1'b0;
+      // Clear if the next lane is ready
+      if (bc_ready_i) begin
+        data_used_d = 1'b0;
+        bc_ready    = 1'b1;
+        bc_valid_o  = 1'b1;
       end
     end
-
-    if (~bc_op_buffer_empty && bc_ready_i)
-      bc_op_buffer_pop = 1'b1;
   end
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if(~rst_ni) begin
-      data_stored_q <= 1'b0;
+      data_used_q <= 1'b0;
     end else begin
-      data_stored_q <= data_stored_d;
+      data_used_q <= data_used_d;
     end
   end
 
 endmodule : bc_operand_queue
-
