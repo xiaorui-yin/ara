@@ -40,6 +40,17 @@ module lane_sequencer import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::
   //  Register the request  //
   ////////////////////////////
 
+  // Don't accept the same request more than once!
+  // The main sequencer keeps the valid high and broadcast
+  // a certain instruction with ID == X to all the lanes
+  // until every lane has sampled it.
+
+  // Every time a lane handshakes the main sequencer, it also
+  // saves the insn ID, not to re-sample the same instruction.
+  vid_t last_id_d, last_id_q;
+  logic pe_req_valid_i_msk;
+  logic en_sync_mask_d, en_sync_mask_q;
+
   pe_req_t pe_req;
   logic    pe_req_valid;
   logic    pe_req_ready;
@@ -47,17 +58,48 @@ module lane_sequencer import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::
   fall_through_register #(
     .T(pe_req_t)
   ) i_pe_req_register (
-    .clk_i     (clk_i         ),
-    .rst_ni    (rst_ni        ),
-    .clr_i     (1'b0          ),
-    .testmode_i(1'b0          ),
-    .data_i    (pe_req_i      ),
-    .valid_i   (pe_req_valid_i),
-    .ready_o   (pe_req_ready_o),
-    .data_o    (pe_req        ),
-    .valid_o   (pe_req_valid  ),
-    .ready_i   (pe_req_ready  )
+    .clk_i     (clk_i             ),
+    .rst_ni    (rst_ni            ),
+    .clr_i     (1'b0              ),
+    .testmode_i(1'b0              ),
+    .data_i    (pe_req_i          ),
+    .valid_i   (pe_req_valid_i_msk),
+    .ready_o   (pe_req_ready_o    ),
+    .data_o    (pe_req            ),
+    .valid_o   (pe_req_valid      ),
+    .ready_i   (pe_req_ready      )
   );
+
+  always_comb begin
+    // If the sync mask is enabled and the ID is the same
+    // as before, avoid to re-sample the same instruction
+    // more than once.
+    if (en_sync_mask_q && (pe_req_i.id == last_id_q))
+      pe_req_valid_i_msk = 1'b0;
+    else
+      pe_req_valid_i_msk = pe_req_valid_i;
+
+    // Enable the sync mask when a handshake happens,
+    // and save the insn ID
+    if (pe_req_valid_i_msk && pe_req_ready_o) begin
+      last_id_d      = pe_req_i.id;
+      en_sync_mask_d = 1'b1;
+    end
+
+    // Disable the block if the sequencer valid goes down
+    if (!pe_req_valid_i && en_sync_mask_q)
+      en_sync_mask_d = 1'b0;
+  end
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      last_id_q      <= '0;
+      en_sync_mask_q <= 1'b0;
+    end else begin
+      last_id_q      <= last_id_d;
+      en_sync_mask_q <= en_sync_mask_d;
+    end
+  end
 
   //////////////////////////////////////
   //  Operand Request Command Queues  //
@@ -217,15 +259,6 @@ module lane_sequencer import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::
       // If lane_id_i < vl % NrLanes, this lane has to execute one extra micro-operation.
       if (lane_id_i < pe_req.vl[idx_width(NrLanes)-1:0]) vfu_operation_d.vl += 1;
 
-      // Mute request if the instruction runs in the lane and the vl is zero.
-      // During a reduction, all the lanes must cooperate anyway.
-      if (vfu_operation_d.vl == '0 && (vfu_operation_d.vfu inside {VFU_Alu, VFU_MFpu, VFU_MaskUnit}) && !(vfu_operation_d.op inside {[VREDSUM:VWREDSUM], [VFREDUSUM:VFWREDOSUM]})) begin
-        vfu_operation_valid_d = 1'b0;
-        // We are already done with this instruction
-        vinsn_done_d[pe_req.id] |= 1'b1;
-        vinsn_running_d[pe_req.id] = 1'b0;
-      end
-
       // Vector start calculation
       vfu_operation_d.vstart = pe_req.vstart / NrLanes;
       // If lane_id_i < vstart % NrLanes, this lane needs to execute one micro-operation less.
@@ -233,6 +266,17 @@ module lane_sequencer import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::
 
       // Mark the vector instruction as running
       vinsn_running_d[pe_req.id] = (vfu_operation_d.vfu != VFU_None) ? 1'b1 : 1'b0;
+
+      // Mute request if the instruction runs in the lane and the vl is zero.
+      // Exception 1: insn on mask vectors, as MASKU has to receive something from all lanes
+      // and the partial results come from VALU and VMFPU.
+      // Exception 2: during a reduction, all the lanes must cooperate anyway.
+      if (vfu_operation_d.vl == '0 && (vfu_operation_d.vfu inside {VFU_Alu, VFU_MFpu}) && !(vfu_operation_d.op inside {[VREDSUM:VWREDSUM], [VFREDUSUM:VFWREDOSUM]})) begin
+        vfu_operation_valid_d = 1'b0;
+        // We are already done with this instruction
+        vinsn_done_d[pe_req.id] |= 1'b1;
+        vinsn_running_d[pe_req.id] = 1'b0;
+      end
 
       ////////////////////////
       //  Operand requests  //

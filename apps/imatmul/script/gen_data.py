@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2021 ETH Zurich and University of Bologna.
+# Copyright 2022 ETH Zurich and University of Bologna.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -15,7 +15,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# arg1: vector size, arg2: filter size
+# Author: Matteo Perotti
+
+# C = AB with A=[MxN], B=[NxP], C=[MxP]
+# arg1, arg2, arg3: M, N, P
 
 import random as rand
 import numpy as np
@@ -36,23 +39,33 @@ def emit(name, array, alignment='8'):
 ## SCRIPT ##
 ############
 
-if len(sys.argv) == 2:
-  NDWT = int(sys.argv[1])
+if len(sys.argv) == 4:
+  M = int(sys.argv[1])
+  N = int(sys.argv[2])
+  P = int(sys.argv[3])
 else:
-  print("Error. Give me one argument: the number of vector elements.")
+  print("Error. Give me three argument: M, N, P.")
+  print("C = AB with A=[MxN], B=[NxP], C=[MxP]")
   sys.exit()
 
-dtype = np.float32
+dtype = np.int64
 
-# Vector of samples
-data = np.random.rand(NDWT).astype(dtype);
+UPPER_LIMIT = 10000
+LOWER_LIMIT = -10000
 
-# Buffer
-buf = np.zeros(int(NDWT/2), dtype=dtype)
+# Matrices and results
+A = np.random.randint(LOWER_LIMIT, UPPER_LIMIT, size=(M, N)).astype(dtype)
+B = np.random.randint(LOWER_LIMIT, UPPER_LIMIT, size=(N, P)).astype(dtype)
+C = np.zeros([M, P], dtype=dtype)
+# Golden result matrix
+G = np.matmul(A, B).astype(dtype)
 
 # Create the file
 print(".section .data,\"aw\",@progbits")
-emit("DWT_LEN", np.array(NDWT, dtype=np.uint64))
-emit("data_s", data, 'NR_LANES*4')
-emit("data_v", data, 'NR_LANES*4')
-emit("buf", buf, 'NR_LANES*4')
+emit("M", np.array(M, dtype=np.uint64))
+emit("N", np.array(N, dtype=np.uint64))
+emit("P", np.array(P, dtype=np.uint64))
+emit("a", A, 'NR_LANES*4')
+emit("b", B, 'NR_LANES*4')
+emit("c", C, 'NR_LANES*4')
+emit("g", G, 'NR_LANES*4')

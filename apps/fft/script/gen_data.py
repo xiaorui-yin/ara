@@ -17,7 +17,6 @@
 
 # arg1: image size, arg2: filter size
 
-import random as rand
 import numpy as np
 import sys
 
@@ -80,11 +79,10 @@ def setupTwiddlesLUT_dif_vec(Twiddles_vec, Nfft):
       twi[...]['im'] = np.sin(Phi)
 
 def setupInput(samples, Nfft, dyn):
-  rand.seed()
   with np.nditer(samples, op_flags=['readwrite']) as it:
     for samp in it:
-      samp[...]['re'] = rand.uniform(-2**15, 2**15-1)
-      samp[...]['im'] = rand.uniform(-2**15, 2**15-1)
+      samp[...]['re'] = np.random.rand(1)
+      samp[...]['im'] = np.random.rand(1)
 
 def emit(name, array, alignment='8'):
 	print(".global %s" % name)
@@ -143,16 +141,29 @@ gold_out = np.fft.fft(samples['re'] + 1j * samples['im'])
 #print(gold_out)
 
 # Serialize the complex array
-samples_s   = serialize_cmplx(samples['re'] + 1j * samples['im'], NFFT, dtype)
-twiddle_s   = serialize_cmplx(twiddle['re'] + 1j * twiddle['im'], NFFT, dtype)
-twiddle_v_s = serialize_cmplx(twiddle_v['re'] + 1j * twiddle_v['im'], N_TWID_V, dtype)
-gold_out_s  = serialize_cmplx(gold_out, NFFT, dtype)
+samples_s    = serialize_cmplx(samples['re'] + 1j * samples['im'], NFFT, dtype)
+twiddle_s    = serialize_cmplx(twiddle['re'] + 1j * twiddle['im'], NFFT, dtype)
+twiddle_v_s  = serialize_cmplx(twiddle_v['re'] + 1j * twiddle_v['im'], N_TWID_V, dtype)
+gold_out_s   = serialize_cmplx(gold_out, NFFT, dtype)
 #print(gold_out_s)
+
+# Create the sequential vectors - Real, and Imaginary
+samples_reim              = np.empty(2 * NFFT, dtype=dtype)
+samples_reim[   0:  NFFT] = samples_s[0::2]
+samples_reim[NFFT:2*NFFT] = samples_s[1::2]
+
+twiddle_vec_reim                      = np.empty(2*N_TWID_V, dtype=dtype)
+twiddle_vec_reim[   0:      N_TWID_V] = twiddle_v_s[0::2]
+twiddle_vec_reim[N_TWID_V:2*N_TWID_V] = twiddle_v_s[1::2]
 
 # Create the file
 print(".section .data,\"aw\",@progbits")
 emit("NFFT", np.array(NFFT, dtype=np.uint64))
 emit("samples", samples_s.astype(dtype), 'NR_LANES*4')
+emit("samples_s", samples_s.astype(dtype), 'NR_LANES*4')
+emit("samples_reim", samples_reim.astype(dtype), 'NR_LANES*4')
+emit("samples_reim_s", samples_reim.astype(dtype), 'NR_LANES*4')
 emit("twiddle", twiddle_s.astype(dtype), 'NR_LANES*4')
 emit("twiddle_vec", twiddle_v_s.astype(dtype), 'NR_LANES*4')
+emit("twiddle_vec_reim", twiddle_vec_reim.astype(dtype), 'NR_LANES*4')
 emit("gold_out", gold_out_s.astype(dtype), 'NR_LANES*4')

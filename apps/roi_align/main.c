@@ -36,6 +36,24 @@ extern int box_index_data[];
 extern float crops_data[];
 extern float crops_data_vec[];
 
+// Compare the vector and scalar implementation.
+// Return 0 if no error is found
+// Return -1 if we have an error on the first element
+// A positive return value indicates the index of the faulty element
+int verify_result(float *s_crops_data, float *v_crops_data, size_t size,
+                  float delta) {
+  int ret;
+
+  for (unsigned long int i = 0; i < size; ++i) {
+    if (!similarity_check_32b(s_crops_data[i], v_crops_data[i], delta)) {
+      ret = (!i) ? -1 : i;
+      return ret;
+    }
+  }
+
+  return 0;
+}
+
 int main() {
   printf("\n");
   printf("===============\n");
@@ -46,6 +64,7 @@ int main() {
 
   int64_t err;
   int64_t runtime_s, runtime_v;
+  uint64_t result_size = N_BOXES * DEPTH * CROP_HEIGHT * CROP_WIDTH;
 
   /*
     Initialize Matrices
@@ -92,14 +111,14 @@ int main() {
          (float)runtime_s / runtime_v);
 
   // Check for errors
-  err = verify_result(crops_data, crops_data_vec,
-                      N_BOXES * DEPTH * CROP_HEIGHT * CROP_WIDTH);
+  err = verify_result(crops_data, crops_data_vec, result_size, DELTA);
 
   if (err != 0) {
     // Fix return code to match the index of the faulty element
     err = (err == -1) ? 0 : err;
     printf("Failed. Index %d: %x != %x\n", err, *((uint32_t *)&crops_data[err]),
            *((uint32_t *)&crops_data_vec[err]));
+    return err;
   } else {
     printf("Passed.\n");
   }
