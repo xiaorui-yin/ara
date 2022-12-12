@@ -24,16 +24,13 @@
 
 #include "runtime.h"
 
-extern const int dim1, dim2, dim3; // row & column size
+extern const int dim1, dim2, dim3;
 extern float mat_a[] __attribute__((aligned(32 * NR_LANES)));
 extern float mat_b[] __attribute__((aligned(32 * NR_LANES)));
 extern float mat_c[] __attribute__((aligned(32 * NR_LANES)));
 extern float bias[] __attribute__((aligned(32 * NR_LANES)));
 extern float o_gold[] __attribute__((aligned(32 * NR_LANES)));
 extern float o[] __attribute__((aligned(32 * NR_LANES)));
-extern float o_t[] __attribute__((aligned(32 * NR_LANES)));
-extern float o_b[] __attribute__((aligned(32 * NR_LANES)));
-extern float o_a[] __attribute__((aligned(32 * NR_LANES)));
 
 int main() {
   printf("\n");
@@ -50,38 +47,39 @@ int main() {
 
 #ifndef SPIKE
   start_timer();
-  fmatmul(o, mat_a, mat_b, dim1, dim2, dim3);
-  // fmatmul_transpose(o, mat_a, mat_b, dim1, dim2, dim3);
+  // fmatmul(o, mat_a, mat_b, dim1, dim2, dim3);
+  // fmatmul_t(o, mat_a, mat_b, dim1, dim2, dim3);
   // fmatmul_bias(o, mat_a, mat_b, bias, dim1, dim2, dim3);
-  // fmatmul_add(o, mat_a, mat_b, bias, mat_c, dim1, dim2, dim3);
+  fmatmul_add(o, mat_a, mat_b, bias, mat_c, dim1, dim2, dim3);
   stop_timer();
 
   // Performance metrics
   int64_t runtime = get_timer();
   // // matmul
-  float performance = (float)(2 * dim1 * dim2 * dim3) / runtime;
-  float performance_ = (float)(dim1 * dim2 * dim3) / runtime;
-  // matmul_bias
+  // float performance = (float)(2 * dim1 * dim2 * dim3) / runtime;
+  // float performance_ = (float)(dim1 * dim2 * dim3) / runtime;
+
+  // // matmul_bias
   // float performance = (float)(2 * dim1 * dim2 * dim3 + dim1 * dim3) /
-  // runtime; float performance_ = (float)(dim1 * dim2 * dim3 + dim1 * dim3) /
-  // runtime; matmul_add float performance = (float)(2 * dim1 * dim2 * dim3 + 2
-  // * dim1 * dim3) / runtime; float performance_ = (float)(dim1 * dim2 * dim3 +
-  // 2 * dim1 * dim3) / runtime;
+  // runtime;
+  // float performance_ = (float)(dim1 * dim2 * dim3 + dim1 * dim3) / runtime;
+
+  // matmul_add
+  float performance =
+      (float)(2 * dim1 * dim2 * dim3 + 2 * dim1 * dim3) / runtime;
+  float performance_ = (float)(dim1 * dim2 * dim3 + 2 * dim1 * dim3) / runtime;
   float utilization = 100.0 * performance_ / (2.0 * NR_LANES);
 
   printf("The execution took %d cycles.\n", runtime);
   printf("The performance is %f SPFLOP/cycle (%f%% utilization).\n",
          performance, utilization);
 #else
-  fmatmul(o, mat_a, mat_b, dim1, dim2, dim3);
-  // fmatmul_transpose(o, mat_a, mat_b, dim1, dim2, dim3);
+  // fmatmul(o, mat_a, mat_b, dim1, dim2, dim3);
+  // fmatmul_t(o, mat_a, mat_b, dim1, dim2, dim3);
   // fmatmul_bias(o, mat_a, mat_b, bias, dim1, dim2, dim3);
-  // fmatmul_add(o, mat_a, mat_b, bias, mat_c, dim1, dim2, dim3);
-  // fmatmul_concate(o, mat_a, mat_b, dim1, dim2, dim3, dim3);
+  fmatmul_add(o, mat_a, mat_b, bias, mat_c, dim1, dim2, dim3);
 #endif
 
   printf("Verifying result\n");
-  // compare_matrix(o, o_gold, dim1, dim3);
-  compare_matrix(o, o_t, dim3, dim1);
-  // compare_matrix(o, o_b, dim1, dim3);
+  compare_matrix(o, o_gold, dim1, dim3);
 }

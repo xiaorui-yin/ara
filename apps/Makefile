@@ -27,7 +27,7 @@ include $(COMMON_DIR)/riscv_tests.mk
 include $(COMMON_DIR)/default_args.mk
 
 SKIP_APPS = "utils|layernorm|softmax_opt|softmax_t|dropout_t|transformer|self_attention|multihead_attention|relu|matmul|matmul_v2|matmul_v3|feed_forward|test"
-APPS := $(patsubst $(APPS_DIR)/%/main.c,%,$(shell find $(APPS_DIR) -name "main.c" | egrep -v $(SKIP_APPS)))
+APPS := $(patsubst $(APPS_DIR)/%/main.c,%,$(shell find $(APPS_DIR) -name "main.c" | grep -Evw $(SKIP_APPS)))
 # Don't automatically compile the benchmark app, which is only a wrapper around the other apps
 BINARIES := $(filter-out bin/benchmarks, $(addprefix bin/,$(APPS)))
 

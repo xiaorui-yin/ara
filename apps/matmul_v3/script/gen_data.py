@@ -17,6 +17,7 @@
 
 # arg1: image size, arg2: filter size
 
+from typing import Match
 import numpy as np
 import sys
 import torch
@@ -34,7 +35,8 @@ def emit(name, array, alignment='NR_LANES*32'):
 			s += "%02x" % bs[i+3-n]
 		print("    .word 0x%s" % s)
 
-(dim1, dim2, dim3) = (64, 1280, 80)
+# func: normal(0) transpose(1) bias(2) biasAdd(3)
+(dim1, dim2, dim3, func) = (64, 64, 64, 3)
 
 # Generate inputs
 mat_a = 10 * torch.rand((dim1, dim2))
@@ -44,22 +46,30 @@ bias = torch.randn(dim3) * 3.14
 o = torch.rand((dim1, dim3))
 
 o_gold = torch.matmul(mat_a, mat_b)
-o_b = o_gold + bias
-o_t = torch.transpose(o_gold, 0, 1)
-mat_a_t = torch.transpose(mat_a, 0, 1)
-o_a = o_b + mat_c
+
+if func == 0:
+    mat_a = torch.transpose(mat_a, 0, 1)
+    o_gold = torch.transpose(o_gold, 0, 1)
+elif func == 1:
+    o_gold = torch.transpose(o_gold, 0, 1)
+elif func == 2:
+    mat_a = torch.transpose(mat_a, 0, 1)
+    o_gold = o_gold + bias
+    o_gold = torch.transpose(o_gold, 0, 1)
+elif func == 3:
+    mat_a = torch.transpose(mat_a, 0, 1)
+    o_gold = o_gold + bias + mat_c
+    mat_c = torch.transpose(mat_c, 0, 1)
+    o_gold = torch.transpose(o_gold, 0, 1)
 
 print(".section .data,\"aw\",@progbits")
 emit("dim1", np.array(dim1, dtype=np.int32))
 emit("dim2", np.array(dim2, dtype=np.int32))
 emit("dim3", np.array(dim3, dtype=np.int32))
 
-emit("mat_a", mat_a_t.numpy().astype(np.float32), 'NR_LANES*32')
+emit("mat_a", mat_a.numpy().astype(np.float32), 'NR_LANES*32')
 emit("mat_b", mat_b.numpy().astype(np.float32), 'NR_LANES*32')
 emit("mat_c", mat_c.numpy().astype(np.float32), 'NR_LANES*32')
 emit("bias", bias.numpy().astype(np.float32), 'NR_LANES*32')
 emit("o_gold", o_gold.numpy().astype(np.float32), 'NR_LANES*32')
 emit("o", o.numpy().astype(np.float32), 'NR_LANES*32')
-emit("o_t", o_t.numpy().astype(np.float32), 'NR_LANES*32')
-emit("o_b", o_b.numpy().astype(np.float32), 'NR_LANES*32')
-emit("o_a", o_a.numpy().astype(np.float32), 'NR_LANES*32')

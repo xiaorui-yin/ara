@@ -22,12 +22,26 @@
 
 #include <stdint.h>
 
+// Base MatMul with max performance
+// Matrix A is in transposed form
 void fmatmul(float *c, const float *a, const float *b,
              const unsigned long int m, const unsigned long int n,
              const unsigned long int p);
 
+// Matrix A is in normal form
+void fmatmul_t(float *c, const float *a, const float *b,
+               const unsigned long int m, const unsigned long int n,
+               const unsigned long int p);
+
+// Add bias value to the result (length of bias: p)
 void fmatmul_bias(float *c, const float *a, const float *b, const float *bias,
                   const unsigned long int m, const unsigned long int n,
                   const unsigned long int p);
+
+// Add bias value and residual matrix x to the result
+// length of bias: M, size of x: M x P
+void fmatmul_add(float *c, const float *a, const float *b, const float *bias,
+                 const float *x, const unsigned long int m,
+                 const unsigned long int n, const unsigned long int p);
 
 #endif

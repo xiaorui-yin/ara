@@ -35,7 +35,7 @@ def emit(name, array, alignment='NR_LANES*32'):
 def softmax(mat):
     row = mat.size()[-2]
     col = mat.size()[-1]
-   
+
     o = torch.Tensor(row, col)
 
     cur_sum = torch.zeros(row)

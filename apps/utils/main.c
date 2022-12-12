@@ -25,11 +25,9 @@
 
 #include "runtime.h"
 
-extern const int dim1, dim2, dim3; // row & column size
-extern float mat_a[]
-    __attribute__((aligned(32 * NR_LANES))); // matrix data (N x M) to normalize
-extern float mat_b[]
-    __attribute__((aligned(32 * NR_LANES))); // matrix data (N x M) to normalize
+extern const int dim1, dim2, dim3;
+extern float mat_a[] __attribute__((aligned(32 * NR_LANES)));
+extern float mat_b[] __attribute__((aligned(32 * NR_LANES)));
 extern float o_gold[] __attribute__((aligned(32 * NR_LANES)));
 extern float o[] __attribute__((aligned(32 * NR_LANES)));
 extern float o_t[] __attribute__((aligned(32 * NR_LANES)));
