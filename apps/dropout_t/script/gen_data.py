@@ -37,14 +37,11 @@ def emit(name, array, alignment='NR_LANES*32'):
 			s += "%02x" % bs[i+3-n]
 		print("    .word 0x%s" % s)
 
-row = 64
-col = 1024 * 4
+(row, col) = (64, 64)
 p = 0.1
 
 # Generate inputs
 mat = torch.randn((row, col))* 3.14
-# prob = torch.ones(row, col) * (1-p)
-# sel = torch.bernoulli(prob)
 
 kernel = Dropout()
 (o_gold, sel, scale) = kernel(mat, p)
@@ -55,6 +52,6 @@ emit("col", np.array(col, dtype=np.int32))
 emit("scale", np.array(scale, dtype=np.float32))
 
 emit("mat", mat.numpy().astype(np.float32), 'NR_LANES*32')
-emit("sel", sel.numpy().astype(np.int32), 'NR_LANES*32')
+emit("sel", np.array(sel, dtype=np.uint8), 'NR_LANES*32')
 
 emit("o_gold", o_gold.numpy().astype(np.float32), 'NR_LANES*32')

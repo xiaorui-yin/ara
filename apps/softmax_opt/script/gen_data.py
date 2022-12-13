@@ -67,15 +67,14 @@ def softmax(mat):
     return o
 
 
-(row, col) = (64, 64)
-transposed = 1
+(row, col, transpose) = (64, 64, 1)
 
 # Generate inputs
 mat = torch.rand((row, col))
 mat_t = torch.transpose(mat, 0, 1)
 
 kernel = torch.nn.Softmax(dim=1)
-if (transposed):
+if (transpose):
     o_gold = kernel(mat_t)
     o_gold = torch.transpose(o_gold, 0, 1)
 else:
@@ -87,3 +86,4 @@ emit("col", np.array(col, dtype=np.int32))
 emit("mat", mat.numpy().astype(np.float32), 'NR_LANES*32')
 emit("o", mat.numpy().astype(np.float32), 'NR_LANES*32')
 emit("o_gold", o_gold.numpy().astype(np.float32), 'NR_LANES*32')
+emit("transpose", transpose, 'NR_LANES*32')

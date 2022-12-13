@@ -19,22 +19,20 @@
 #include "printf.h"
 #endif
 
-// TODO: V2, store mask to the memory
 void relu(float *mat, int row, int col) {
-  size_t vlmax = vsetvlmax_e32m1();
+  size_t vlmax = vsetvlmax_e32m8();
+  long int len = row * col;
 
-  for (int i = 0; i < row; i++) {
-    for (int j = 0; j < col;) {
-      int vl = vlmax;
-      // if (j + vlmax > col) vl = col - j;
-      if (j + vlmax > col)
-        vl = vsetvl_e32m1(col - j);
+  for (int i = 0; i < len;) {
+    int vl = vlmax;
 
-      vfloat32m1_t vec = vle32_v_f32m1(&mat[i * col + j], vl);
-      vec = vfmax_vf_f32m1(vec, 0, vl);
-      vse32_v_f32m1(&mat[i * col + j], vec, vl);
+    if (i + vlmax > len)
+      vl = vsetvl_e32m8(len - i);
 
-      j += vl;
-    }
+    vfloat32m8_t vec = vle32_v_f32m8(&mat[i], vl);
+    vec = vfmax_vf_f32m8(vec, 0, vl);
+    vse32_v_f32m8(&mat[i], vec, vl);
+
+    i += vl;
   }
 }

@@ -26,6 +26,8 @@
 
 #include "runtime.h"
 
+#define CHECK
+
 extern int col, row; // row & column size
 extern float mat[] __attribute__((aligned(32 * NR_LANES)));
 extern float o[] __attribute__((aligned(32 * NR_LANES)));
@@ -61,6 +63,8 @@ int main() {
   relu(mat, row, col);
 #endif
 
+#ifdef CHECK
   printf("Verifying result\n");
   compare_matrix(mat, o_gold, row, col);
+#endif
 }

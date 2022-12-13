@@ -17,6 +17,14 @@
 import torch
 import torch.nn as nn
 
+def gen_sel_mask(sel):
+    # Generate the selection mask for vector data
+    SEL = []
+    for s in torch.reshape(sel, (-1, 8)):
+        SEL_ = ''.join(reversed(['1' if x else '0' for x in s]))
+        SEL.append(int(SEL_, 2))
+    return SEL
+
 class Dropout(nn.Module):
     def __init__(self):
         super(Dropout, self).__init__()
@@ -26,5 +34,6 @@ class Dropout(nn.Module):
         sel = torch.bernoulli(prob)
         out = x * scale
         out = out * sel
-        return (out, sel, scale)
 
+        sel = gen_sel_mask(sel>0)
+        return (out, sel, scale)

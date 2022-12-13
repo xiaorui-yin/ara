@@ -15,6 +15,7 @@
 // limitations under the License.
 
 #include <riscv_vector.h>
+#include <stdint.h>
 #include <stdio.h>
 
 #include "common/common.h"
@@ -26,10 +27,12 @@
 
 #include "runtime.h"
 
+#define CHECK
+
 extern int col, row; // row & column size
 extern float scale;
 extern float mat[] __attribute__((aligned(32 * NR_LANES)));
-extern int sel[] __attribute__((aligned(32 * NR_LANES)));
+extern uint8_t sel[] __attribute__((aligned(32 * NR_LANES)));
 extern float o_gold[] __attribute__((aligned(32 * NR_LANES)));
 
 int main() {
@@ -47,7 +50,7 @@ int main() {
 
 #ifndef SPIKE
   start_timer();
-  dropout(mat, sel, scale, row, col);
+  dropout_vec(row * col, mat, scale, sel, mat);
   stop_timer();
 
   // Performance metrics
@@ -59,9 +62,11 @@ int main() {
   printf("The performance is %f SPFLOP/cycle (%f%% utilization).\n",
          performance, utilization);
 #else
-  dropout(mat, sel, scale, row, col);
+  dropout_vec(row * col, mat, scale, sel, mat);
 #endif
 
+#ifdef CHECK
   printf("Verifying result\n");
   compare_matrix(mat, o_gold, row, col);
+#endif
 }

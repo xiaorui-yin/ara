@@ -25,7 +25,10 @@
 
 #include "runtime.h"
 
+#define CHECK
+
 extern const int row, col;
+extern const int transpose;
 extern float mat[] __attribute__((aligned(32 * NR_LANES)));
 extern float o[] __attribute__((aligned(32 * NR_LANES)));
 extern float o_gold[] __attribute__((aligned(32 * NR_LANES)));
@@ -45,8 +48,10 @@ int main() {
 
 #ifndef SPIKE
   start_timer();
-  // softmax(mat, o, row, col);
-  softmax_t(mat, o, row, col);
+  if (transpose == 0)
+    softmax(mat, o, row, col);
+  else
+    softmax_t(mat, o, row, col);
   stop_timer();
 
   // Performance metrics
@@ -59,9 +64,14 @@ int main() {
   printf("The performance is %f SPFLOP/cycle (%f%% utilization).\n",
          performance, utilization);
 #else
-  softmax_t(mat, o, row, col);
-  // softmax(mat, o, row, col);
+  if (transpose == 0)
+    softmax(mat, o, row, col);
+  else
+    softmax_t(mat, o, row, col);
 #endif
+
+#ifdef CHECK
   printf("Verifying result\n");
   compare_matrix(o, o_gold, row, col);
+#endif
 }
