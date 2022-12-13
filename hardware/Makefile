@@ -47,8 +47,12 @@ veril_path     ?= $(abspath $(INSTALL_DIR)/verilator/bin)
 veril_top      ?= ara_tb_verilator
 # Top level module to compile
 top_level      ?= ara_tb
-# QuestaSim Version
-questa_version ?= 2021.2
+# Questa version
+ifeq ($(vcd_dump), 1)
+  questa_version ?= 2019.3
+else
+  questa_version ?= 2021.2
+endif
 # QuestaSim command
 questa_cmd     ?= questa-$(questa_version)
 # QuestaSim arguments
@@ -63,6 +67,11 @@ ifeq ($(ideal_dispatcher), 1)
   vtrace       = $(vtrace_path)/$(app).vtrace
   bender_defs += --define IDEAL_DISPATCHER=1 --define VTRACE="$(vtrace)" --define N_VINSN=$(shell wc -l $(vtrace) | cut -d " " -f 1)
   ideal        = "_ideal"
+endif
+
+ifeq ($(vcd_dump), 1)
+  vcd_path    ?= ../vcd/$(app).vcd
+  bender_defs += --define VCD_DUMP=1 --define VCD_PATH=$(vcd_path)
 endif
 
 # Check if the specified QuestaSim version exists

@@ -18,6 +18,8 @@ module ara_soc import axi_pkg::*; import ara_pkg::*; #(
     parameter  int           unsigned AxiAddrWidth = 64,
     parameter  int           unsigned AxiUserWidth = 1,
     parameter  int           unsigned AxiIdWidth   = 5,
+    // AXI Resp Delay [ps] for gate-level simulation
+    parameter  int           unsigned AxiRespDelay = 200,
     // Main memory
     parameter  int           unsigned L2NumWords   = 2**20,
     // Dependant parameters. DO NOT CHANGE!
@@ -106,6 +108,9 @@ module ara_soc import axi_pkg::*; import ara_pkg::*; #(
   `AXI_LITE_TYPEDEF_ALL(soc_narrow_lite, axi_addr_t, axi_narrow_data_t, axi_narrow_strb_t)
 
   // Buses
+  system_req_t  system_axi_req_spill;
+  system_resp_t system_axi_resp_spill;
+  system_resp_t system_axi_resp_spill_del;
   system_req_t  system_axi_req;
   system_resp_t system_axi_resp;
 
@@ -227,7 +232,8 @@ module ara_soc import axi_pkg::*; import ara_pkg::*; #(
   tc_sram #(
     .NumWords (L2NumWords  ),
     .NumPorts (1           ),
-    .DataWidth(AxiDataWidth)
+    .DataWidth(AxiDataWidth),
+    .SimInit("random")
   ) i_dram (
     .clk_i  (clk_i                                                                      ),
     .rst_ni (rst_ni                                                                     ),
@@ -348,6 +354,8 @@ module ara_soc import axi_pkg::*; import ara_pkg::*; #(
   soc_narrow_lite_req_t  axi_lite_ctrl_registers_req;
   soc_narrow_lite_resp_t axi_lite_ctrl_registers_resp;
 
+  logic [63:0] event_trigger;
+
   axi_to_axi_lite #(
     .AxiAddrWidth   (AxiAddrWidth          ),
     .AxiDataWidth   (AxiNarrowDataWidth    ),
@@ -385,7 +393,8 @@ module ara_soc import axi_pkg::*; import ara_pkg::*; #(
     .hw_cnt_en_o          (hw_cnt_en_o                 ),
     .dram_base_addr_o     (/* Unused */                ),
     .dram_end_addr_o      (/* Unused */                ),
-    .exit_o               (exit_o                      )
+    .exit_o               (exit_o                      ),
+    .event_trigger_o      (event_trigger)
   );
 
   axi_dw_converter #(
@@ -477,15 +486,43 @@ module ara_soc import axi_pkg::*; import ara_pkg::*; #(
   ara_system
 `endif
   i_system (
-    .clk_i        (clk_i            ),
-    .rst_ni       (rst_ni           ),
-    .boot_addr_i  (DRAMBase         ), // start fetching from DRAM
-    .scan_enable_i(1'b0             ),
-    .scan_data_i  (1'b0             ),
-    .scan_data_o  (/* Unconnected */),
-    .axi_req_o    (system_axi_req   ),
-    .axi_resp_i   (system_axi_resp  )
+    .clk_i        (clk_i                    ),
+    .rst_ni       (rst_ni                   ),
+    .boot_addr_i  (DRAMBase                 ), // start fetching from DRAM
+    .scan_enable_i(1'b0                     ),
+    .scan_data_i  (1'b0                     ),
+    .scan_data_o  (/* Unconnected */        ),
+`ifndef TARGET_GATESIM
+    .axi_req_o    (system_axi_req           ),
+    .axi_resp_i   (system_axi_resp          )
   );
+`else
+    .axi_req_o    (system_axi_req_spill     ),
+    .axi_resp_i   (system_axi_resp_spill_del)
+  );
+`endif
+
+
+`ifdef TARGET_GATESIM
+  assign #(AxiRespDelay*1ps) system_axi_resp_spill_del = system_axi_resp_spill;
+
+  axi_cut #(
+    .ar_chan_t   (system_ar_chan_t     ),
+    .aw_chan_t   (system_aw_chan_t     ),
+    .b_chan_t    (system_b_chan_t      ),
+    .r_chan_t    (system_r_chan_t      ),
+    .w_chan_t    (system_w_chan_t      ),
+    .req_t       (system_req_t         ),
+    .resp_t      (system_resp_t        )
+  ) i_system_cut (
+    .clk_i       (clk_i),
+    .rst_ni      (rst_ni),
+    .slv_req_i   (system_axi_req_spill),
+    .slv_resp_o  (system_axi_resp_spill),
+    .mst_req_o   (system_axi_req),
+    .mst_resp_i  (system_axi_resp)
+  );
+`endif
 
   //////////////////
   //  Assertions  //
