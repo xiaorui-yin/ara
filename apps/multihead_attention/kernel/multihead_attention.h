@@ -25,11 +25,16 @@
   d_model alpha, beta: layernorm parameters
 
   output:
-  multihead_attn: n x d_model
+  o: n x d_model
 */
-void multihead_attention(float *x, float *multihead_attn, float *wq,
-                         float *q_bias, float *wk, float *k_bias, float *wv,
-                         float *v_bias, float *wo, float *o_bias, float *alpha,
-                         float *beta, int n, int d_model, int h);
+void multihead_attention(float *x, float *o, float *wq, float *q_bias,
+                         float *wk, float *k_bias, float *wv, float *v_bias,
+                         float *wo, float *o_bias, float *alpha, float *beta,
+                         int n, int d_model, int h);
+
+void multihead_attention_t(float *x, float *o, float *wq, float *q_bias,
+                           float *wk, float *k_bias, float *wv, float *v_bias,
+                           float *wo, float *o_bias, float *alpha, float *beta,
+                           int n, int d_model, int h);
 
 #endif // !MULTIHEAD_ATTENTION_H

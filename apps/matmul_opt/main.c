@@ -15,7 +15,7 @@
 // limitations under the License.
 
 #include "common/common.h"
-#include "kernel/fmatmul.h"
+#include "kernel/matmul_opt.h"
 #include <riscv_vector.h>
 #include <stdio.h>
 #ifndef SPIKE
@@ -24,7 +24,10 @@
 
 #include "runtime.h"
 
+#define CHECK
+
 extern const int dim1, dim2, dim3;
+extern const int func;
 extern float mat_a[] __attribute__((aligned(32 * NR_LANES)));
 extern float mat_b[] __attribute__((aligned(32 * NR_LANES)));
 extern float mat_c[] __attribute__((aligned(32 * NR_LANES)));
@@ -47,39 +50,59 @@ int main() {
 
 #ifndef SPIKE
   start_timer();
-  // fmatmul(o, mat_a, mat_b, dim1, dim2, dim3);
-  // fmatmul_t(o, mat_a, mat_b, dim1, dim2, dim3);
-  // fmatmul_bias(o, mat_a, mat_b, bias, dim1, dim2, dim3);
-  fmatmul_add(o, mat_a, mat_b, bias, mat_c, dim1, dim2, dim3);
+  switch (func) {
+  case 0:
+    matmul_t(o, mat_a, mat_b, 1, dim1, dim1, dim2, dim3);
+    break;
+  case 1:
+    matmul_tb(o, mat_a, mat_b, bias, 1, dim1, dim2, dim3);
+    break;
+  case 2:
+    matmul_ta(o, mat_a, mat_b, bias, mat_c, 0, dim1, dim2, dim3);
+    break;
+  }
   stop_timer();
 
   // Performance metrics
   int64_t runtime = get_timer();
-  // // matmul
-  // float performance = (float)(2 * dim1 * dim2 * dim3) / runtime;
-  // float performance_ = (float)(dim1 * dim2 * dim3) / runtime;
+  float performance, performance_;
 
-  // // matmul_bias
-  // float performance = (float)(2 * dim1 * dim2 * dim3 + dim1 * dim3) /
-  // runtime;
-  // float performance_ = (float)(dim1 * dim2 * dim3 + dim1 * dim3) / runtime;
+  switch (func) {
+  case 0:
+    performance = (float)(2 * dim1 * dim2 * dim3) / runtime;
+    performance_ = (float)(dim1 * dim2 * dim3) / runtime;
+    break;
+  case 1:
+    performance = (float)(2 * dim1 * dim2 * dim3 + dim1 * dim3) / runtime;
+    performance_ = (float)(dim1 * dim2 * dim3 + dim1 * dim3) / runtime;
+    break;
+  case 2:
+    performance = (float)(2 * dim1 * dim2 * dim3 + 2 * dim1 * dim3) / runtime;
+    performance_ = (float)(dim1 * dim2 * dim3 + 2 * dim1 * dim3) / runtime;
+    break;
+  }
 
-  // matmul_add
-  float performance =
-      (float)(2 * dim1 * dim2 * dim3 + 2 * dim1 * dim3) / runtime;
-  float performance_ = (float)(dim1 * dim2 * dim3 + 2 * dim1 * dim3) / runtime;
   float utilization = 100.0 * performance_ / (2.0 * NR_LANES);
 
   printf("The execution took %d cycles.\n", runtime);
   printf("The performance is %f SPFLOP/cycle (%f%% utilization).\n",
          performance, utilization);
 #else
-  // fmatmul(o, mat_a, mat_b, dim1, dim2, dim3);
-  // fmatmul_t(o, mat_a, mat_b, dim1, dim2, dim3);
-  // fmatmul_bias(o, mat_a, mat_b, bias, dim1, dim2, dim3);
-  fmatmul_add(o, mat_a, mat_b, bias, mat_c, dim1, dim2, dim3);
+  switch (func) {
+  case 0:
+    matmul_t(o, mat_a, mat_b, 1, dim1, dim1, dim2, dim3);
+    break;
+  case 1:
+    matmul_tb(o, mat_a, mat_b, bias, 1, dim1, dim2, dim3);
+    break;
+  case 2:
+    matmul_ta(o, mat_a, mat_b, bias, mat_c, 0, dim1, dim2, dim3);
+    break;
+  }
 #endif
 
+#ifdef CHECK
   printf("Verifying result\n");
   compare_matrix(o, o_gold, dim1, dim3);
+#endif
 }

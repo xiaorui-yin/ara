@@ -17,6 +17,7 @@
 #include "common/common.h"
 #include "kernel/feed_forward.h"
 #include <riscv_vector.h>
+#include <stdint.h>
 #include <stdio.h>
 
 #ifndef SPIKE
@@ -26,6 +27,7 @@
 #include "runtime.h"
 
 extern const int n, d_model;
+extern const int transpose;
 extern const float scale;
 extern float x[] __attribute__((aligned(32 * NR_LANES), section(".l2")));
 extern float w1[] __attribute__((aligned(32 * NR_LANES), section(".l2")));
@@ -34,7 +36,7 @@ extern float w2[] __attribute__((aligned(32 * NR_LANES), section(".l2")));
 extern float bias_2[] __attribute__((aligned(32 * NR_LANES), section(".l2")));
 extern float beta[] __attribute__((aligned(32 * NR_LANES), section(".l2")));
 extern float alpha[] __attribute__((aligned(32 * NR_LANES), section(".l2")));
-extern int sel[] __attribute__((aligned(32 * NR_LANES), section(".l2")));
+extern uint8_t sel[] __attribute__((aligned(32 * NR_LANES), section(".l2")));
 extern float o_gold[] __attribute__((aligned(32 * NR_LANES), section(".l2")));
 extern float o[] __attribute__((aligned(32 * NR_LANES), section(".l2")));
 
@@ -53,8 +55,12 @@ int main() {
 
 #ifndef SPIKE
   start_timer();
-  feed_forward(x, o, w1, bias_1, w2, bias_2, alpha, beta, sel, scale, n,
-               d_model);
+  if (transpose == 0)
+    feed_forward(x, o, w1, bias_1, w2, bias_2, alpha, beta, sel, scale, n,
+                 d_model);
+  else
+    feed_forward_t(x, o, w1, bias_1, w2, bias_2, alpha, beta, sel, scale, n,
+                   d_model);
   stop_timer();
 
   // Performance metrics
@@ -74,11 +80,14 @@ int main() {
   printf("The performance is %f SPFLOP/cycle (%f%% utilization).\n",
          performance, utilization);
 #else
-  feed_forward(x, o, w1, bias_1, w2, bias_2, alpha, beta, sel, scale, n,
-               d_model);
+  if (transpose == 0)
+    feed_forward(x, o, w1, bias_1, w2, bias_2, alpha, beta, sel, scale, n,
+                 d_model);
+  else
+    feed_forward_t(x, o, w1, bias_1, w2, bias_2, alpha, beta, sel, scale, n,
+                   d_model);
 #endif
 
   printf("Verifying result\n");
-  compare_matrix(o, o_gold, n, d_model);
-  // compare_matrix(o, o_gold, n, d_model*4);
+  compare_matrix(o, o_gold, d_model, n);
 }

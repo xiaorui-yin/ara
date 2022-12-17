@@ -26,6 +26,7 @@
 #include "runtime.h"
 
 extern const int n, d_model, h;
+extern const int transpose;
 extern float x[] __attribute__((aligned(32 * NR_LANES)));
 extern float wq[] __attribute__((aligned(32 * NR_LANES)));
 extern float q_bias[] __attribute__((aligned(32 * NR_LANES)));
@@ -55,8 +56,13 @@ int main() {
 
 #ifndef SPIKE
   start_timer();
-  multihead_attention(x, o, wq, q_bias, wk, k_bias, wv, v_bias, wo, o_bias,
-                      alpha, beta, n, d_model, h);
+  if (transpose == 0)
+    multihead_attention(x, o, wq, q_bias, wk, k_bias, wv, v_bias, wo, o_bias,
+                        alpha, beta, n, d_model, h);
+  else
+    multihead_attention_t(x, o, wq, q_bias, wk, k_bias, wv, v_bias, wo, o_bias,
+                          alpha, beta, n, d_model, h);
+
   stop_timer();
 
   // Performance metrics
@@ -86,8 +92,12 @@ int main() {
   printf("The performance is %f SPFLOP/cycle (%f%% utilization).\n",
          performance, utilization);
 #else
-  multihead_attention(x, o, wq, q_bias, wk, k_bias, wv, v_bias, wo, o_bias,
-                      alpha, beta, n, d_model, h);
+  if (transpose == 0)
+    multihead_attention(x, o, wq, q_bias, wk, k_bias, wv, v_bias, wo, o_bias,
+                        alpha, beta, n, d_model, h);
+  else
+    multihead_attention_t(x, o, wq, q_bias, wk, k_bias, wv, v_bias, wo, o_bias,
+                          alpha, beta, n, d_model, h);
 #endif
 
   printf("Verifying result\n");

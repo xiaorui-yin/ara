@@ -17,6 +17,11 @@
 #include "riscv_vector.h"
 
 void layernorm(float *mat, float *alpha, float *beta, int row, int col) {
+
+#ifdef VCD_DUMP
+  event_trigger = +1
+#endif
+
   size_t vlmax = vsetvlmax_e32m1();
   vfloat32m1_t mean, var;
   vfloat32m1_t tmp_vec;
@@ -83,9 +88,18 @@ void layernorm(float *mat, float *alpha, float *beta, int row, int col) {
 
     i += vl;
   }
+
+#ifdef VCD_DUMP
+  event_trigger = -1
+#endif
 }
 
 void layernorm_t(float *mat, float *alpha, float *beta, int row, int col) {
+
+#ifdef VCD_DUMP
+  event_trigger = +1
+#endif
+
   size_t vlmax = vsetvlmax_e32m1();
   vfloat32m1_t mean, var;
   vfloat32m1_t tmp_vec;
@@ -148,6 +162,10 @@ void layernorm_t(float *mat, float *alpha, float *beta, int row, int col) {
 
     i += vl;
   }
+
+#ifdef VCD_DUMP
+  event_trigger = -1
+#endif
 }
 
 void layernorm_v2(float *mat, float *alpha, float *beta, int row, int col) {

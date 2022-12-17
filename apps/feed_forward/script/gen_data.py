@@ -35,8 +35,7 @@ def emit(name, array, alignment='NR_LANES*32'):
 			s += "%02x" % bs[i+3-n]
 		print("    .word 0x%s" % s)
 
-d_model = 1024
-n = 64
+(n, d_model, transpose) = (32, 16, 1)
 d_ff = 4 * d_model
 
 # Generate inputs
@@ -51,15 +50,19 @@ alpha = 10 * torch.randn(d_model)
 beta = 10 * torch.randn(d_model)
 
 o = 10 * torch.randn((n, d_model))
-# o = 10 * torch.randn((n, d_ff))
 
 kernel = FeedForward(w1, bias_1, w2, bias_2, alpha, beta)
 (o_gold, sel, scale) = kernel(x)
+
+if transpose:
+    x = torch.transpose(x, 0, 1)
+    o_gold = torch.transpose(o_gold, 0, 1)
 
 print(".section .data,\"aw\",@progbits")
 emit("n", np.array(n, dtype=np.int32))
 emit("d_model", np.array(d_model, dtype=np.int32))
 emit("scale", np.array(scale, dtype=np.float32))
+emit("transpose", np.array(transpose, dtype=np.float32))
 
 emit("x", x.numpy().astype(np.float32), 'NR_LANES*32')
 emit("w1", w1.numpy().astype(np.float32), 'NR_LANES*32')
@@ -70,7 +73,7 @@ emit("bias_2", bias_2.numpy().astype(np.float32), 'NR_LANES*32')
 emit("alpha", alpha.numpy().astype(np.float32), 'NR_LANES*32')
 emit("beta", beta.numpy().astype(np.float32), 'NR_LANES*32')
 
-emit("sel", sel.numpy().astype(np.int32), 'NR_LANES*32')
+emit("sel", np.array(sel, dtype=np.uint8), 'NR_LANES*32')
 
 emit("o_gold", o_gold.numpy().astype(np.float32), 'NR_LANES*32')
 emit("o", o.numpy().astype(np.float32), 'NR_LANES*32')

@@ -29,6 +29,10 @@
 
 void softmax(const float *i, const float *o, uint64_t row, uint64_t col) {
 
+#ifdef VCD_DUMP
+  event_trigger = +1
+#endif
+
   /* ONLY FOR DEBUGGING PURPOSE. DELETE THE FOLLOWING ASM LINES
    */
   // Clean the regs from Xes
@@ -129,9 +133,17 @@ void softmax(const float *i, const float *o, uint64_t row, uint64_t col) {
     __i = _i;
     __o = _o;
   }
+
+#ifdef VCD_DUMP
+  event_trigger = -1
+#endif
 }
 
 void softmax_t(const float *i, const float *o, uint64_t row, uint64_t col) {
+
+#ifdef VCD_DUMP
+  event_trigger = +1
+#endif
 
   /* ONLY FOR DEBUGGING PURPOSE. DELETE THE FOLLOWING ASM LINES
    */
@@ -233,4 +245,8 @@ void softmax_t(const float *i, const float *o, uint64_t row, uint64_t col) {
     __i = _i;
     __o = _o;
   }
+
+#ifdef VCD_DUMP
+  event_trigger = +1
+#endif
 }

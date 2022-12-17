@@ -1,1 +1,1 @@
-../../softmax/kernel/softmax.h
+../../softmax_opt/kernel/softmax.h

@@ -20,6 +20,11 @@
 #endif
 
 void relu(float *mat, int row, int col) {
+
+#ifdef VCD_DUMP
+  event_trigger = +1
+#endif
+
   size_t vlmax = vsetvlmax_e32m8();
   long int len = row * col;
 
@@ -35,4 +40,8 @@ void relu(float *mat, int row, int col) {
 
     i += vl;
   }
+
+#ifdef VCD_DUMP
+  event_trigger = -1
+#endif
 }

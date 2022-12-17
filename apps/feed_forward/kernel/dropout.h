@@ -1,1 +1,1 @@
-../../dropout/kernel/dropout.h
+../../dropout_t/kernel/dropout.h

@@ -25,7 +25,10 @@
 
 #include "runtime.h"
 
+#define CHECK
+
 extern const int n, d_model, dk;
+extern const int transpose;
 extern float x[] __attribute__((aligned(32 * NR_LANES)));
 extern float wq[] __attribute__((aligned(32 * NR_LANES)));
 extern float q_bias[] __attribute__((aligned(32 * NR_LANES)));
@@ -51,7 +54,11 @@ int main() {
 
 #ifndef SPIKE
   start_timer();
-  self_attention(x, o, wq, q_bias, wk, k_bias, wv, v_bias, n, d_model, dk);
+  if (transpose == 0)
+    self_attention(x, o, wq, q_bias, wk, k_bias, wv, v_bias, n, d_model, dk);
+  else
+    self_attention_t(x, o, wq, q_bias, wk, k_bias, wv, v_bias, n, d_model, dk);
+
   stop_timer();
 
   // Performance metrics
@@ -70,9 +77,14 @@ int main() {
   printf("The performance is %f SPFLOP/cycle (%f%% utilization).\n",
          performance, utilization);
 #else
-  self_attention(x, o, wq, q_bias, wk, k_bias, wv, v_bias, n, d_model, dk);
+  if (transpose == 0)
+    self_attention(x, o, wq, q_bias, wk, k_bias, wv, v_bias, n, d_model, dk);
+  else
+    self_attention_t(x, o, wq, q_bias, wk, k_bias, wv, v_bias, n, d_model, dk);
 #endif
 
+#ifdef CHECK
   printf("Verifying result\n");
   compare_matrix(o, o_gold, n, dk);
+#endif
 }

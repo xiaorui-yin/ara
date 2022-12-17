@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <stdint.h>
 #ifndef FEED_FORWARD_H
 #define FEED_FORWARD_H
 /*
@@ -26,7 +27,10 @@
   o = ((activation(x * w1).dropout()) * w2 + x).layernorm()
 */
 void feed_forward(float *x, float *o, float *w1, float *bias_1, float *w2,
-                  float *bias_2, float *alpha, float *beta, int *sel,
+                  float *bias_2, float *alpha, float *beta, uint8_t *sel,
                   const float scale, const int n, const int d_model);
 
+void feed_forward_t(float *x, float *o, float *w1, float *bias_1, float *w2,
+                    float *bias_2, float *alpha, float *beta, uint8_t *sel,
+                    const float scale, const int n, const int d_model);
 #endif // !FEED_FORWARD_H

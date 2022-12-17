@@ -1,19 +1,105 @@
-#include "fmatmul.h"
-// #include "printf.h"
+#include "matmul_opt.h"
 #include <stdio.h>
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
-// ---------------
-// 16x16
-// ---------------
 
-// Matrix A is transposed, (N x M), and the result matrix C is also transposed
-// (P x M)
-void fmatmul(float *c, const float *a, const float *b,
-             const unsigned long int M, const unsigned long int N,
-             const unsigned long int P) {
-  const int REUSE_SIZE = 4;
-  const int stride_c = 4 * M;
+void matmul_t(float *c, const float *a, const float *b, const int is_a_t,
+              const unsigned int offset, const unsigned long int M,
+              const unsigned long int N, const unsigned long int P) {
+
+  if (is_a_t == 1)
+    matmul_t_at(c, a, b, offset, M, N, P);
+  else
+    matmul_t_a(c, a, b, offset, M, N, P);
+}
+
+void matmul_tb(float *c, const float *a, const float *b, const float *bias,
+               const int is_a_t, const unsigned long int m,
+               const unsigned long int n, const unsigned long int p) {
+#ifdef VCD_DUMP
+  event_trigger = +1
+#endif
+                  matmul_t(c, a, b, is_a_t, m, m, n, p);
+
+  unsigned int vl;
+  // Set the vector configuration
+  asm volatile("vsetvli %0, %1, e32, m1, ta, ma" : "=r"(vl) : "r"(p));
+
+  // Process 2 rows at a time
+  for (unsigned int i = 0; i < p; i += 2) {
+    for (unsigned int j = 0; j < m;) {
+      vl = MIN(m - j, vl);
+      asm volatile("vsetvli zero, %0, e32, m1, ta, ma" ::"r"(vl));
+
+      asm volatile("vle32.v v0, (%0)" ::"r"(c + i * m + j));
+      asm volatile("vle32.v v1, (%0)" ::"r"(c + (i + 1) * m + j));
+      asm volatile("vfadd.vf v2, v0, %[A]" ::[A] "f"(bias[i]));
+      asm volatile("vse32.v v2, (%0);" ::"r"(c + i * m + j));
+      asm volatile("vfadd.vf v3, v1, %[A]" ::[A] "f"(bias[i + 1]));
+      asm volatile("vse32.v v3, (%0);" ::"r"(c + (i + 1) * m + j));
+
+      j += vl;
+    }
+  }
+
+#ifdef VCD_DUMP
+  event_trigger = -1
+#endif
+}
+
+void matmul_ta(float *c, const float *a, const float *b, const float *bias,
+               const float *x, const int is_a_t, const unsigned long int m,
+               const unsigned long int n, const unsigned long int p) {
+
+#ifdef VCD_DUMP
+  event_trigger = +1
+#endif
+
+                  matmul_t(c, a, b, is_a_t, m, m, n, p);
+
+  unsigned int vl;
+  // Set the vector configuration
+  asm volatile("vsetvli %0, %1, e32, m1, ta, ma" : "=r"(vl) : "r"(p));
+
+  // Process 2 rows at a time
+  for (unsigned int i = 0; i < p; i += 2) {
+    for (unsigned int j = 0; j < m;) {
+      vl = MIN(m - j, vl);
+      asm volatile("vsetvli zero, %0, e32, m1, ta, ma" ::"r"(vl));
+
+      asm volatile("vle32.v v0, (%0)" ::"r"(c + i * m + j));
+      asm volatile("vle32.v v1, (%0)" ::"r"(c + (i + 1) * m + j));
+
+      asm volatile("vle32.v v4, (%0)" ::"r"(x + i * m + j));
+      asm volatile("vfadd.vf v2, v0, %[A]" ::[A] "f"(bias[i]));
+      asm volatile("vfadd.vv v2, v2, v4");
+      asm volatile("vse32.v v2, (%0);" ::"r"(c + i * m + j));
+
+      asm volatile("vle32.v v5, (%0)" ::"r"(x + (i + 1) * m + j));
+      asm volatile("vfadd.vf v3, v1, %[A]" ::[A] "f"(bias[i + 1]));
+      asm volatile("vfadd.vv v3, v3, v5");
+      asm volatile("vse32.v v3, (%0);" ::"r"(c + (i + 1) * m + j));
+
+      j += vl;
+    }
+  }
+
+#ifdef VCD_DUMP
+  event_trigger = -1
+#endif
+}
+
+void matmul_t_at(float *c, const float *a, const float *b,
+                 const unsigned int offset, const unsigned long int M,
+                 const unsigned long int N, const unsigned long int P) {
+
+#ifdef VCD_DUMP
+  event_trigger = +1
+#endif
+
+                  const int REUSE_SIZE = 4;
+  const int stride_c = 4 * offset;
+  const int stride_a = 4 * N;
   // We work on 64 elements of the matrix B at once
   const unsigned long int block_size_p = 32;
   // block_size_m <= M, REUSE_SIZE * length of b_vec * 32 < VRF capacity
@@ -44,8 +130,8 @@ void fmatmul(float *c, const float *a, const float *b,
       // First op with scalar zero
       // load vec_b
       asm volatile("vle32bc.v v31, (%0)" ::"r"(b_));
+
       // load vec_a
-      // asm volatile("vlse32.v v0, (%0), %1" ::"r"(a_), "r"(stride_a));
       asm volatile("vle32.v v0, (%0)" ::"r"(a_));
       float t0 = 0; // First Operation, accumulated result is 0
       asm volatile("vfbmacc.vf v8, %0, v0" ::"f"(t0));
@@ -85,13 +171,22 @@ void fmatmul(float *c, const float *a, const float *b,
   int tmp1 = 0;
   int tmp2 = 0;
   asm volatile("vsetbl %0, %1, %2" ::"r"(tmp2), "r"(0), "r"(tmp1));
+
+#ifdef VCD_DUMP
+  event_trigger = -1
+#endif
 }
 
-void fmatmul_t(float *c, const float *a, const float *b,
-               const unsigned long int M, const unsigned long int N,
-               const unsigned long int P) {
-  const int REUSE_SIZE = 4;
-  const int stride_c = 4 * M;
+void matmul_t_a(float *c, const float *a, const float *b,
+                const unsigned int offset, const unsigned long int M,
+                const unsigned long int N, const unsigned long int P) {
+
+#ifdef VCD_DUMP
+  event_trigger = +1
+#endif
+
+                  const int REUSE_SIZE = 4;
+  const int stride_c = 4 * offset;
   const int stride_a = 4 * N;
   // We work on 64 elements of the matrix B at once
   const unsigned long int block_size_p = 32;
@@ -123,8 +218,8 @@ void fmatmul_t(float *c, const float *a, const float *b,
       // First op with scalar zero
       // load vec_b
       asm volatile("vle32bc.v v31, (%0)" ::"r"(b_));
+
       // load vec_a
-      // asm volatile("vlse32.v v0, (%0), %1" ::"r"(a_), "r"(stride_a));
       asm volatile("vlse32.v v0, (%0), %1" ::"r"(a_), "r"(stride_a));
       float t0 = 0; // First Operation, accumulated result is 0
       asm volatile("vfbmacc.vf v8, %0, v0" ::"f"(t0));
@@ -164,68 +259,8 @@ void fmatmul_t(float *c, const float *a, const float *b,
   int tmp1 = 0;
   int tmp2 = 0;
   asm volatile("vsetbl %0, %1, %2" ::"r"(tmp2), "r"(0), "r"(tmp1));
-}
 
-void fmatmul_bias(float *c, const float *a, const float *b, const float *bias,
-                  const unsigned long int m, const unsigned long int n,
-                  const unsigned long int p) {
-  // c = a x b
-  // c: pxm
-  fmatmul(c, a, b, m, n, p);
-
-  unsigned int vl;
-  // Set the vector configuration
-  asm volatile("vsetvli %0, %1, e32, m1, ta, ma" : "=r"(vl) : "r"(p));
-
-  // Process 2 rows at a time
-  for (unsigned int i = 0; i < p; i += 2) {
-    for (unsigned int j = 0; j < m;) {
-      vl = MIN(m - j, vl);
-      asm volatile("vsetvli zero, %0, e32, m1, ta, ma" ::"r"(vl));
-
-      asm volatile("vle32.v v0, (%0)" ::"r"(c + i * m + j));
-      asm volatile("vle32.v v1, (%0)" ::"r"(c + (i + 1) * m + j));
-      asm volatile("vfadd.vf v2, v0, %[A]" ::[A] "f"(bias[i]));
-      asm volatile("vse32.v v2, (%0);" ::"r"(c + i * m + j));
-      asm volatile("vfadd.vf v3, v1, %[A]" ::[A] "f"(bias[i + 1]));
-      asm volatile("vse32.v v3, (%0);" ::"r"(c + (i + 1) * m + j));
-
-      j += vl;
-    }
-  }
-}
-
-void fmatmul_add(float *c, const float *a, const float *b, const float *bias,
-                 const float *x, const unsigned long int m,
-                 const unsigned long int n, const unsigned long int p) {
-  // c = a x b
-  // c: pxm
-  fmatmul(c, a, b, m, n, p);
-
-  unsigned int vl;
-  // Set the vector configuration
-  asm volatile("vsetvli %0, %1, e32, m1, ta, ma" : "=r"(vl) : "r"(p));
-
-  // Process 2 rows at a time
-  for (unsigned int i = 0; i < p; i += 2) {
-    for (unsigned int j = 0; j < m;) {
-      vl = MIN(m - j, vl);
-      asm volatile("vsetvli zero, %0, e32, m1, ta, ma" ::"r"(vl));
-
-      asm volatile("vle32.v v0, (%0)" ::"r"(c + i * m + j));
-      asm volatile("vle32.v v1, (%0)" ::"r"(c + (i + 1) * m + j));
-
-      asm volatile("vle32.v v4, (%0)" ::"r"(x + i * m + j));
-      asm volatile("vfadd.vf v2, v0, %[A]" ::[A] "f"(bias[i]));
-      asm volatile("vfadd.vv v2, v2, v4");
-      asm volatile("vse32.v v2, (%0);" ::"r"(c + i * m + j));
-
-      asm volatile("vle32.v v5, (%0)" ::"r"(x + (i + 1) * m + j));
-      asm volatile("vfadd.vf v3, v1, %[A]" ::[A] "f"(bias[i + 1]));
-      asm volatile("vfadd.vv v3, v3, v5");
-      asm volatile("vse32.v v3, (%0);" ::"r"(c + (i + 1) * m + j));
-
-      j += vl;
-    }
-  }
+#ifdef VCD_DUMP
+  event_trigger = -1
+#endif
 }

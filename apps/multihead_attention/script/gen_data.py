@@ -36,10 +36,8 @@ def emit(name, array, alignment='NR_LANES*32'):
 			s += "%02x" % bs[i+3-n]
 		print("    .word 0x%s" % s)
 
-d_model = 1024
-h = 16
+(n, d_model, h, transpose) = (32, 64, 1, 1)
 dk = d_model // h
-n = 64
 
 # Generate inputs
 x = torch.randn((n, d_model)) * 3.14
@@ -66,10 +64,15 @@ scale = math.sqrt(dk)
 wq /= scale
 q_bias /= scale
 
+if transpose == 1:
+    x = torch.transpose(x, 0, 1)
+    o_gold = torch.transpose(o_gold, 0, 1)
+
 print(".section .data,\"aw\",@progbits")
 emit("n", np.array(n, dtype=np.int32))
 emit("d_model", np.array(d_model, dtype=np.int32))
 emit("h", np.array(h, dtype=np.int32))
+emit("transpose", np.array(transpose, dtype=np.int32))
 
 emit("x", x.numpy().astype(np.float32), 'NR_LANES*32')
 emit("wk", wk.numpy().astype(np.float32), 'NR_LANES*32')

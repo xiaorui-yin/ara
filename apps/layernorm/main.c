@@ -25,7 +25,10 @@
 
 #include "runtime.h"
 
+#define CHECK
+
 extern const int row, col;
+extern const int transpose;
 extern float mat[] __attribute__((aligned(32 * NR_LANES), section(".l2")));
 extern float alpha[] __attribute__((aligned(32 * NR_LANES), section(".l2")));
 extern float beta[] __attribute__((aligned(32 * NR_LANES), section(".l2")));
@@ -46,8 +49,10 @@ int main() {
 
 #ifndef SPIKE
   start_timer();
-  // layernorm(mat, alpha, beta, row, col);
-  layernorm_t(mat, alpha, beta, row, col);
+  if (transpose == 0)
+    layernorm(mat, alpha, beta, row, col);
+  else
+    layernorm_t(mat, alpha, beta, row, col);
   stop_timer();
 
   // Performance metrics
@@ -61,10 +66,14 @@ int main() {
   printf("The performance is %f SP-FLOP/cycle (%f%% utilization).\n",
          performance, utilization);
 #else
-  // layernorm(mat, alpha, beta, row, col);
-  layernorm_t(mat, alpha, beta, row, col);
+  if (transpose == 0)
+    layernorm(mat, alpha, beta, row, col);
+  else
+    layernorm_t(mat, alpha, beta, row, col);
 #endif
 
+#ifdef CHECK
   printf("Verifying result\n");
   compare_matrix(mat, o_gold, row, col);
+#endif
 }

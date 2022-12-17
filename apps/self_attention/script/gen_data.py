@@ -39,12 +39,10 @@ def attention(x, wq, q_bias, wk, k_bias, wv, v_bias, dk):
     v = torch.matmul(x, wv) + v_bias
 
     score = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(dk)
-    score = torch.nn.Softmax(dim=1)(score)
+    # score = torch.nn.Softmax(dim=1)(score)
     return torch.matmul(score, v)
 
-d_model = 1024
-dk = 64
-n = 64
+(n, d_model, dk, transpose) = (32, 64, 64, 1)
 
 # Generate inputs
 x = torch.randn((n, d_model)) * 3.14
@@ -63,10 +61,14 @@ scale = math.sqrt(dk)
 wq = wq / scale
 q_bias = q_bias / scale
 
+if transpose == 1:
+    x = torch.transpose(x, 0, 1)
+
 print(".section .data,\"aw\",@progbits")
 emit("n", np.array(n, dtype=np.int32))
 emit("d_model", np.array(d_model, dtype=np.int32))
 emit("dk", np.array(dk, dtype=np.int32))
+emit("transpose", np.array(transpose, dtype=np.int32))
 
 emit("x", x.numpy().astype(np.float32), 'NR_LANES*32')
 emit("wk", wk.numpy().astype(np.float32), 'NR_LANES*32')

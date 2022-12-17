@@ -31,14 +31,13 @@ def emit(name, array, alignment='NR_LANES*32'):
 			s += "%02x" % bs[i+3-n]
 		print("    .word 0x%s" % s)
 
-(row, col, transpose) = (64, 768, True)
+(row, col, transpose) = (32, 32, True)
 
 # Generate inputs
 mat   = 3.14 * torch.randn((row, col))
 
 alpha = 3.14 * torch.randn(col)
-# beta  = 3.14 * torch.randn(col)
-beta  = 314 * torch.ones(col)
+beta  = 3.14 * torch.randn(col)
 
 kernel = LayerNorm(alpha, beta)
 o_gold = kernel(mat)
@@ -57,3 +56,4 @@ emit("mat", mat.numpy().astype(np.float32), 'NR_LANES*32')
 emit("alpha", alpha.numpy().astype(np.float32), 'NR_LANES*32')
 emit("beta", beta.numpy().astype(np.float32), 'NR_LANES*32')
 emit("o_gold", o_gold.numpy().astype(np.float32), 'NR_LANES*32')
+emit("transpose", np.array(transpose, dtype=np.int32))

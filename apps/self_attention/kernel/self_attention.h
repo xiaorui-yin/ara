@@ -21,4 +21,7 @@ void self_attention(float *x, float *o, float *wq, float *q_bias, float *wk,
                     float *k_bias, float *wv, float *v_bias, int n, int d_model,
                     int dk);
 
+void self_attention_t(float *x, float *o, float *wq, float *q_bias, float *wk,
+                      float *k_bias, float *wv, float *v_bias, int n,
+                      int d_model, int dk);
 #endif

@@ -17,11 +17,13 @@
 #include "dropout.h"
 #include "fmatmul.h"
 #include "layernorm.h"
+#include "matmul_opt.h"
 #include "relu.h"
 #include "riscv_vector.h"
+#include <stdint.h>
 
 void feed_forward(float *x, float *o, float *w1, float *bias_1, float *w2,
-                  float *bias_2, float *alpha, float *beta, int *sel,
+                  float *bias_2, float *alpha, float *beta, uint8_t *sel,
                   const float scale, const int n, const int d_model) {
   // d_ff: the feature size of weight matricies
   const int d_ff = d_model * 4;
@@ -41,7 +43,7 @@ void feed_forward(float *x, float *o, float *w1, float *bias_1, float *w2,
   // =================================================
 
   relu(o1, n, d_ff);
-  dropout(o1, sel, scale, n, d_ff);
+  dropout_vec(n * d_ff, o1, scale, sel, o1);
 
   // =================================================
   // Second Linear Transformation and Residual Connection
@@ -55,4 +57,41 @@ void feed_forward(float *x, float *o, float *w1, float *bias_1, float *w2,
   // =================================================
 
   layernorm(o, alpha, beta, n, d_model);
+}
+
+void feed_forward_t(float *x, float *o, float *w1, float *bias_1, float *w2,
+                    float *bias_2, float *alpha, float *beta, uint8_t *sel,
+                    const float scale, const int n, const int d_model) {
+  // d_ff: the feature size of weight matricies
+  const int d_ff = d_model * 4;
+
+  float o1[n * d_ff] __attribute__((aligned(32 * NR_LANES)));
+
+  // =================================================
+  // First Linear Transformation
+  // =================================================
+
+  // o1 = x * w1 + bias_1
+  // n x d_ff = n x d_model * d_model x d_ff + n x d_ff
+  matmul_tb(o1, x, w1, bias_1, 1, n, d_model, d_ff);
+
+  // =================================================
+  // Activation and Dropout
+  // =================================================
+
+  relu(o1, d_ff, n);
+  dropout_vec(n * d_ff, o1, scale, sel, o1);
+
+  // =================================================
+  // Second Linear Transformation and Residual Connection
+  // =================================================
+
+  // o = o1 * w2 + bias_2 + x
+  matmul_ta(o, o1, w2, bias_2, x, 1, n, d_ff, d_model);
+
+  // =================================================
+  // Layer Normalization
+  // =================================================
+
+  layernorm_t(o, alpha, beta, d_model, n);
 }
