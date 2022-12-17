@@ -35,7 +35,7 @@ index 20e15e7e0349..a75482f68633 100644
                 string opcodestr, string argstr>
      : RVInst<outs, ins, opcodestr, argstr, [], InstFormatR> {
 diff --git a/llvm/lib/Target/RISCV/RISCVInstrInfoV.td b/llvm/lib/Target/RISCV/RISCVInstrInfoV.td
-index 462faf1f227c..8524774567db 100644
+index 462faf1f227c..e20f309d7d7d 100644
 --- a/llvm/lib/Target/RISCV/RISCVInstrInfoV.td
 +++ b/llvm/lib/Target/RISCV/RISCVInstrInfoV.td
 @@ -158,6 +158,12 @@ class VUnitStrideLoad<RISCVWidth width, string opcodestr>
@@ -58,7 +58,7 @@ index 462faf1f227c..8524774567db 100644
 +
 +def VSETBL : RVInstSetBL<(outs GPR:$rd), (ins GPR:$rs1, GPR:$rs2),
 +                         "vsetbl", "$rd, $rs1, $rs2">,
-+                          Sched<[WriteVSETBL, ReadVSETBL, ReadVSETBL]>;
++                          Sched<[WriteVSETVL, ReadVSETVL, ReadVSETVL]>;
  } // hasSideEffects = 1, mayLoad = 0, mayStore = 0
  foreach eew = [8, 16, 32] in {
    defvar w = !cast<RISCVWidth>("LSWidth" # eew);
