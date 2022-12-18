@@ -37,6 +37,14 @@ def emit(name, array, alignment='NR_LANES*32'):
 			s += "%02x" % bs[i+3-n]
 		print("    .word 0x%s" % s)
 
+def gen_sel_mask(sel):
+    # Generate the selection mask for vector data
+    SEL = []
+    for s in torch.reshape(sel, (-1, 8)):
+        SEL_ = ''.join(reversed(['1' if x else '0' for x in s]))
+        SEL.append(int(SEL_, 2))
+    return SEL
+
 (row, col) = (64, 64)
 p = 0.1
 
@@ -45,6 +53,8 @@ mat = torch.randn((row, col))* 3.14
 
 kernel = Dropout()
 (o_gold, sel, scale) = kernel(mat, p)
+
+sel = gen_sel_mask(sel)
 
 print(".section .data,\"aw\",@progbits")
 emit("row", np.array(row, dtype=np.int32))

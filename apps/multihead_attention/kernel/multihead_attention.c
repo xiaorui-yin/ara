@@ -90,5 +90,5 @@ void multihead_attention_t(float *x, float *o, float *wq, float *q_bias,
   // Layer Normalization
   // =================================================
 
-  // layernorm_t(o, alpha, beta, d_model, n);
+  layernorm_t(o, alpha, beta, d_model, n);
 }

@@ -39,10 +39,10 @@ def attention(x, wq, q_bias, wk, k_bias, wv, v_bias, dk):
     v = torch.matmul(x, wv) + v_bias
 
     score = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(dk)
-    # score = torch.nn.Softmax(dim=1)(score)
+    score = torch.nn.Softmax(dim=1)(score)
     return torch.matmul(score, v)
 
-(n, d_model, dk, transpose) = (32, 64, 64, 1)
+(n, d_model, dk, transpose) = (64, 1024, 64, 1)
 
 # Generate inputs
 x = torch.randn((n, d_model)) * 3.14

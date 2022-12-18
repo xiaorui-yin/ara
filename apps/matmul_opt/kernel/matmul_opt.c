@@ -108,7 +108,7 @@ void matmul_t_at(float *c, const float *a, const float *b,
   for (unsigned long int p = 0; p < P; p += block_size_p) {
     // Find pointers to the submatrices
     const float *b_ = b + p;
-    float *c_ = c + p * M;
+    float *c_ = c + p * offset;
 
     // Set the broadcast length
     const unsigned long int p_ = MIN(P - p, block_size_p);
@@ -196,7 +196,7 @@ void matmul_t_a(float *c, const float *a, const float *b,
   for (unsigned long int p = 0; p < P; p += block_size_p) {
     // Find pointers to the submatrices
     const float *b_ = b + p;
-    float *c_ = c + p * M;
+    float *c_ = c + p * offset;
 
     // Set the broadcast length
     const unsigned long int p_ = MIN(P - p, block_size_p);

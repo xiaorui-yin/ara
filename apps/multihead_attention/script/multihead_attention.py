@@ -62,6 +62,6 @@ class MultiHeadAttention(nn.Module):
 
         score = torch.matmul(score, self.wo) + self.o_bias
         score = score + x
-        # layernorm = LayerNorm(self.alpha, self.beta)
-        # score = layernorm(score)
+        layernorm = LayerNorm(self.alpha, self.beta)
+        score = layernorm(score)
         return score
