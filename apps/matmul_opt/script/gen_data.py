@@ -36,8 +36,8 @@ def emit(name, array, alignment='NR_LANES*32'):
 		print("    .word 0x%s" % s)
 
 # func: bias(1) biasAdd(2)
-(dim1, dim2, dim3, func) = (32, 64, 64, 2)
-is_a_t = 0
+(dim1, dim2, dim3, func) = (64, 768, 768, 1)
+is_a_t = 1
 
 # Generate inputs
 mat_a = 10 * torch.rand((dim1, dim2))
@@ -58,6 +58,11 @@ o_gold = torch.transpose(o_gold, 0, 1)
 mat_c = torch.transpose(mat_c, 0, 1)
 if is_a_t:
     mat_a = torch.transpose(mat_a, 0, 1)
+
+torch.save(mat_a, 'mat_a.pt')
+torch.save(mat_b, 'mat_b.pt')
+torch.save(bias, 'bias.pt')
+torch.save(o_gold, 'o_gold.pt')
 
 print(".section .data,\"aw\",@progbits")
 emit("dim1", np.array(dim1, dtype=np.int32))

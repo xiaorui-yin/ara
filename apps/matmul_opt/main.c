@@ -103,6 +103,6 @@ int main() {
 
 #ifdef CHECK
   printf("Verifying result\n");
-  compare_matrix(o, o_gold, dim1, dim3);
+  compare_matrix(o, o_gold, dim3, dim1);
 #endif
 }

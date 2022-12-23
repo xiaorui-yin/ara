@@ -1,1 +1,1 @@
-../../dropout/script/dropout.py
+../../dropout_t/script/dropout.py
