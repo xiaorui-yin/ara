@@ -36,14 +36,14 @@ module bc_buffer import ara_pkg::*; import rvv_pkg::*; #(
   // Ping-Pang buffer
   // =================================================================
 
-  logic                    write_buffer_id_d, write_buffer_id_q,
-                           read_buffer_id_d, read_buffer_id_q;
-  logic [1:0]              buffer_flush;
-  logic [1:0]              buffer_full, buffer_empty,
-                           buffer_push, buffer_pop;
-  logic [ELEN*NrLanes-1:0] buffer_din;
-  elen_t [1:0]             buffer_dout;
-  logic [$clog2(NrLanes):0]      buffer_valid_cnt;
+  logic write_buffer_id_d, write_buffer_id_q,
+        read_buffer_id_d, read_buffer_id_q;
+  logic  [1:0] buffer_flush;
+  logic  [1:0] buffer_full, buffer_empty,
+               buffer_push, buffer_pop;
+  logic  [ELEN*NrLanes-1:0] buffer_din;
+  elen_t [1:0] buffer_dout;
+  logic  [$clog2(NrLanes):0] buffer_valid_cnt;
   
 
   for (genvar i = 0; i < 2; i++) begin: gen_re_readable_buffer
@@ -71,6 +71,7 @@ module bc_buffer import ara_pkg::*; import rvv_pkg::*; #(
   // =============================================================
   // Input Data Serialization
   // =============================================================
+
   logic [NrLanes-1:0]       valid_element;
 
   // Count how many valid elements
@@ -102,6 +103,7 @@ module bc_buffer import ara_pkg::*; import rvv_pkg::*; #(
   // Buffer Write Control
   // ==============================================================
 
+
   always_comb begin
     buffer_push            = 2'b00;
     write_buffer_id_d      = write_buffer_id_q;
@@ -123,6 +125,8 @@ module bc_buffer import ara_pkg::*; import rvv_pkg::*; #(
   // Buffer Read Control
   // ==============================================================
 
+  logic  bc_invalidate_d, bc_invalidate_q;
+
   assign bc_valid_o = ~buffer_empty[read_buffer_id_q];
   assign bc_data_o  = buffer_dout[read_buffer_id_q];
 
@@ -130,14 +134,30 @@ module bc_buffer import ara_pkg::*; import rvv_pkg::*; #(
     read_buffer_id_d = read_buffer_id_q;
     buffer_pop       = 2'b00;
     buffer_flush     = 2'b00;
+    bc_invalidate_d  = bc_invalidate_q;
 
     if (bc_ready_i && ~buffer_empty[read_buffer_id_q]) begin
       buffer_pop[read_buffer_id_q] = 1'b1;
     end
 
     if (bc_invalidate_i) begin
+      if (bc_ready_i) begin
+        // If the last data is acknowledged,
+        // reset buffer, and switch to another buffer
         buffer_flush[read_buffer_id_q] = 1'b1;
-        read_buffer_id_d               = ~read_buffer_id_q;
+        read_buffer_id_d = ~read_buffer_id_q;
+      end else begin
+        // Otherwise, store invalidate request
+        bc_invalidate_d = 1'b1;
+      end
+    end
+
+    if (bc_invalidate_q) begin
+      if (bc_ready_i) begin
+        buffer_flush[read_buffer_id_q] = 1'b1;
+        read_buffer_id_d = ~read_buffer_id_q;
+        bc_invalidate_d = 1'b0;
+      end
     end
   end
 
@@ -145,9 +165,11 @@ module bc_buffer import ara_pkg::*; import rvv_pkg::*; #(
     if (!rst_ni) begin
       write_buffer_id_q <= 1'b0;
       read_buffer_id_q  <= 1'b0;
+      bc_invalidate_q   <= 1'b0;
     end else begin
       write_buffer_id_q <= write_buffer_id_d;
       read_buffer_id_q  <= read_buffer_id_d;
+      bc_invalidate_q   <= bc_invalidate_d;
     end
   end
 
