@@ -44,7 +44,7 @@ def gen_sel_mask(sel):
         SEL.append(int(SEL_, 2))
     return SEL
 
-(n, d_model, h, transpose) = (32, 64, 1, 1)
+(n, d_model, h, transpose) = (32, 64, 2, 0)
 dk = d_model // h
 
 # Generate inputs
@@ -68,7 +68,6 @@ kernel = MultiHeadAttention(wq, q_bias, wk, k_bias, wv, v_bias,
         wo, o_bias, alpha, beta)
 
 (o_gold, sel, scale) = kernel(x, n, d_model, h)
-sel = gen_sel_mask(sel)
 
 wq /= math.sqrt(dk)
 q_bias /= math.sqrt(dk)
@@ -76,6 +75,9 @@ q_bias /= math.sqrt(dk)
 if transpose == 1:
     x = torch.transpose(x, 0, 1)
     o_gold = torch.transpose(o_gold, 0, 1)
+    sel = torch.transpose(sel, 0, 1)
+
+sel = gen_sel_mask(sel)
 
 print(".section .data,\"aw\",@progbits")
 emit("n", np.array(n, dtype=np.int32))

@@ -21,7 +21,7 @@
 
 #include <math.h>
 
-// uncomment if running self_attention test
+// if running self_attention test
 // #define SELF_ATTN_TEST
 
 void self_attention(float *o, float *q, float *k, float *v, int n, int d_model, int dk){
@@ -29,11 +29,16 @@ void self_attention(float *o, float *q, float *k, float *v, int n, int d_model, 
   // =================================================
   // Calculate A = (Q * K^T) / sqrt(dk)
   // scaling already done by weight and bias parameters
+  // K is already transposed
   // =================================================
 
   float a[n * n] __attribute__((aligned(32 * NR_LANES)));
 
+#ifndef SELF_ATTN_TEST
+  fmatmul_qk(a, q, k, n, dk, n, d_model);
+#else
   fmatmul(a, q, k, n, dk, n);
+#endif /* !SELF_ATTN_TEST */
 
   // =================================================
   // A = softmax(A)
@@ -47,7 +52,7 @@ void self_attention(float *o, float *q, float *k, float *v, int n, int d_model, 
   // =================================================
 
 #ifndef SELF_ATTN_TEST
-  fmatmul_concate(o, a_, v, n, n, dk, d_model);
+  fmatmul_sv(o, a_, v, n, n, dk, d_model);
 #else
   fmatmul(o, a_, v, n, n, dk);
 #endif /* !SELF_ATTN_TEST */

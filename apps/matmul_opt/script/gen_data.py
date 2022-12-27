@@ -36,7 +36,7 @@ def emit(name, array, alignment='NR_LANES*32'):
 		print("    .word 0x%s" % s)
 
 # func: bias(1) biasAdd(2)
-(dim1, dim2, dim3, func) = (64, 768, 768, 1)
+(dim1, dim2, dim3, func) = (64, 768, 64, 1)
 is_a_t = 1
 
 # Generate inputs

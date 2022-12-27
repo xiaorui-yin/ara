@@ -56,11 +56,11 @@ class MultiHeadAttention(nn.Module):
 
             score[:, i*dk:(i*dk + dk)] = attention(qi, ki, vi, dk)
 
-        dropout = Dropout()
-        (score, sel, scale) = dropout(score)  
-
         score = torch.matmul(score, self.wo) + self.o_bias
         score = score + x
+
+        dropout = Dropout()
+        (score, sel, scale) = dropout(score)  
 
         layernorm = LayerNorm(self.alpha, self.beta)
         out = layernorm(score)

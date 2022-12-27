@@ -34,9 +34,7 @@ def emit(name, array, alignment='NR_LANES*32'):
 			s += "%02x" % bs[i+3-n]
 		print("    .word 0x%s" % s)
 
-dim1 = 64
-dim2 = 768
-dim3 = 3072
+(dim1, dim2, dim3, func) = (64, 64, 64, 0)
 
 # Generate inputs
 mat_a = torch.rand((dim1, dim2))
@@ -46,14 +44,20 @@ bias = torch.randn(dim3) * 3.14
 o = torch.rand((dim1, dim3))
 
 o_gold = torch.matmul(mat_a, mat_b)
-o_b = o_gold + bias
-o_t = torch.transpose(o_gold, 0, 1)
-o_a = o_b + mat_c
+
+if func == 1:
+    o_gold =+ bias
+elif func == 2:
+    o_gold = torch.transpose(o_gold, 0, 1)
+elif func == 3:
+    o_gold = o_gold + bias + mat_c
 
 print(".section .data,\"aw\",@progbits")
 emit("dim1", np.array(dim1, dtype=np.int32))
 emit("dim2", np.array(dim2, dtype=np.int32))
 emit("dim3", np.array(dim3, dtype=np.int32))
+
+emit("func", np.array(func, dtype=np.int32))
 
 emit("mat_a", mat_a.numpy().astype(np.float32), 'NR_LANES*32')
 emit("mat_b", mat_b.numpy().astype(np.float32), 'NR_LANES*32')
@@ -61,7 +65,3 @@ emit("mat_c", mat_c.numpy().astype(np.float32), 'NR_LANES*32')
 emit("bias", bias.numpy().astype(np.float32), 'NR_LANES*32')
 emit("o_gold", o_gold.numpy().astype(np.float32), 'NR_LANES*32')
 emit("o", o.numpy().astype(np.float32), 'NR_LANES*32')
-emit("o_t", o_t.numpy().astype(np.float32), 'NR_LANES*32')
-emit("o_b", o_b.numpy().astype(np.float32), 'NR_LANES*32')
-emit("o_a", o_a.numpy().astype(np.float32), 'NR_LANES*32')
-

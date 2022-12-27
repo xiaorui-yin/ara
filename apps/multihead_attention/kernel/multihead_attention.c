@@ -52,7 +52,7 @@ void multihead_attention(float *x, float *o, float *wq, float *q_bias,
     // self_attention(x, (score + n * dk * i),
     // score + i * dk: the position of the first element of each head
     // FIXME
-    self_attention((score + i * dk), (q + i * dk), (k + i * dk), (v + i * dk),
+    self_attention((score + i * dk), (q + i * dk), (k + i * dk * n), (v + i * dk),
                    n, d_model, dk);
   }
 
@@ -111,17 +111,17 @@ void multihead_attention_t(float *x, float *o, float *wq, float *q_bias,
   }
 
   // =================================================
-  // Dropout
-  // =================================================
-
-  dropout_vec(n * d_model, score, scale, sel, score);
-
-  // =================================================
   // Linear transformation with Wo and Residual Connection
   // =================================================
 
   // score is not transposed (o is transposed)
   matmul_ta(o, score, wo, o_bias, x, 0, n, d_model, d_model);
+
+  // =================================================
+  // Dropout
+  // =================================================
+
+  dropout_vec(n * d_model, o, scale, sel, o);
 
   // =================================================
   // Layer Normalization

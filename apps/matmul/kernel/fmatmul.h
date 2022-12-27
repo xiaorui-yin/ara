@@ -72,10 +72,17 @@ void fmatmul_vec_16x16_add(float *c, const float *a, const float *b,
                            const float *bias, const float *d,
                            unsigned long int n, unsigned long int p);
 
-void fmatmul_concate(float *c, const float *a, const float *b,
+void fmatmul_sv(float *c, const float *a, const float *b,
                      unsigned long int m, unsigned long int n,
                      unsigned long int p, const int d_model);
-void fmatmul_vec_16x16_concate(float *c, const float *a, const float *b,
+void fmatmul_vec_16x16_sv(float *c, const float *a, const float *b,
+                               unsigned long int n, unsigned long int p,
+                               const int d_model);
+
+void fmatmul_qk(float *c, const float *a, const float *b,
+                     unsigned long int m, unsigned long int n,
+                     unsigned long int p, const int d_model);
+void fmatmul_vec_16x16_qk(float *c, const float *a, const float *b,
                                unsigned long int n, unsigned long int p,
                                const int d_model);
 #endif
