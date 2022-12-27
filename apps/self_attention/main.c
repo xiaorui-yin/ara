@@ -29,13 +29,9 @@
 
 extern const int n, d_model, dk;
 extern const int transpose;
-extern float x[] __attribute__((aligned(32 * NR_LANES)));
-extern float wq[] __attribute__((aligned(32 * NR_LANES)));
-extern float q_bias[] __attribute__((aligned(32 * NR_LANES)));
-extern float wk[] __attribute__((aligned(32 * NR_LANES)));
-extern float k_bias[] __attribute__((aligned(32 * NR_LANES)));
-extern float wv[] __attribute__((aligned(32 * NR_LANES)));
-extern float v_bias[] __attribute__((aligned(32 * NR_LANES)));
+extern float q[] __attribute__((aligned(32 * NR_LANES)));
+extern float k[] __attribute__((aligned(32 * NR_LANES)));
+extern float v[] __attribute__((aligned(32 * NR_LANES)));
 extern float o_gold[] __attribute__((aligned(32 * NR_LANES)));
 extern float o[] __attribute__((aligned(32 * NR_LANES)));
 
@@ -55,10 +51,9 @@ int main() {
 #ifndef SPIKE
   start_timer();
   if (transpose == 0)
-    self_attention(x, o, wq, q_bias, wk, k_bias, wv, v_bias, n, d_model, dk);
+    self_attention(o, q, k, v, n, d_model, dk);
   else
-    self_attention_t(x, o, wq, q_bias, wk, k_bias, wv, v_bias, n, d_model, dk);
-
+    self_attention_t(o, q, k, v, n, d_model, dk);
   stop_timer();
 
   // Performance metrics
@@ -78,9 +73,9 @@ int main() {
          performance, utilization);
 #else
   if (transpose == 0)
-    self_attention(x, o, wq, q_bias, wk, k_bias, wv, v_bias, n, d_model, dk);
+    self_attention(o, q, k, v, n, d_model, dk);
   else
-    self_attention_t(x, o, wq, q_bias, wk, k_bias, wv, v_bias, n, d_model, dk);
+    self_attention_t(o, q, k, v, n, d_model, dk);
 #endif
 
 #ifdef CHECK

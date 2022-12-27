@@ -33,36 +33,24 @@ def emit(name, array, alignment='NR_LANES*32'):
 			s += "%02x" % bs[i+3-n]
 		print("    .word 0x%s" % s)
 
-def attention(x, wq, q_bias, wk, k_bias, wv, v_bias, dk):
-    q = torch.matmul(x, wq) + q_bias
-    k = torch.matmul(x, wk) + k_bias
-    v = torch.matmul(x, wv) + v_bias
-
-    score = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(dk)
-    score = torch.nn.Softmax(dim=1)(score)
+def attention(q, k, v):
+    score = torch.matmul(q, k)
+    score = torch.nn.Softmax(dim=-1)(score)
     return torch.matmul(score, v)
 
-(n, d_model, dk, transpose) = (64, 1024, 64, 1)
+(n, d_model, dk, transpose) = (64, 768, 64, 1)
 
 # Generate inputs
-x = torch.randn((n, d_model)) * 3.14
-wq = torch.randn((d_model, dk)) * 3.14
-wk = torch.randn((d_model, dk)) * 3.14
-wv = torch.randn((d_model, dk)) * 3.14
-q_bias = torch.randn(dk) * 3.14 
-k_bias = torch.randn(dk) * 3.14
-v_bias = torch.randn(dk) * 3.14
+q = torch.randn((n, dk)) * 3.14
+k = torch.randn((dk, n)) * 3.14
+v = torch.randn((n, dk)) * 3.14
 
 o = 10 * torch.randn((n, dk))
-o_gold = attention(x, wq, q_bias, wk, k_bias, wv, v_bias, dk)
-
-# Sclae weight and bias of Q to avoid hardware scaling
-scale = math.sqrt(dk)
-wq = wq / scale
-q_bias = q_bias / scale
+o_gold = attention(q, k, v)
 
 if transpose == 1:
-    x = torch.transpose(x, 0, 1)
+    q = torch.transpose(q, 0, 1)
+    v = torch.transpose(v, 0, 1)
 
 print(".section .data,\"aw\",@progbits")
 emit("n", np.array(n, dtype=np.int32))
@@ -70,13 +58,9 @@ emit("d_model", np.array(d_model, dtype=np.int32))
 emit("dk", np.array(dk, dtype=np.int32))
 emit("transpose", np.array(transpose, dtype=np.int32))
 
-emit("x", x.numpy().astype(np.float32), 'NR_LANES*32')
-emit("wk", wk.numpy().astype(np.float32), 'NR_LANES*32')
-emit("wq", wq.numpy().astype(np.float32), 'NR_LANES*32')
-emit("wv", wv.numpy().astype(np.float32), 'NR_LANES*32')
-emit("q_bias", q_bias.numpy().astype(np.float32), 'NR_LANES*32')
-emit("v_bias", v_bias.numpy().astype(np.float32), 'NR_LANES*32')
-emit("k_bias", k_bias.numpy().astype(np.float32), 'NR_LANES*32')
+emit("k", k.numpy().astype(np.float32), 'NR_LANES*32')
+emit("q", q.numpy().astype(np.float32), 'NR_LANES*32')
+emit("v", v.numpy().astype(np.float32), 'NR_LANES*32')
 
 emit("o_gold", o_gold.numpy().astype(np.float32), 'NR_LANES*32')
 emit("o", o.numpy().astype(np.float32), 'NR_LANES*32')

@@ -19,14 +19,11 @@ import torch.nn as nn
 import math
 
 from layernorm import LayerNorm
+from dropout import Dropout
 
-def attention(x, wq, q_bias, wk, k_bias, wv, v_bias, dk):
-    q = torch.matmul(x, wq) + q_bias
-    k = torch.matmul(x, wk) + k_bias
-    v = torch.matmul(x, wv) + v_bias
-
+def attention(q, k, v, dk):
     score = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(dk)
-    score = torch.nn.Softmax(dim=1)(score)
+    score = torch.nn.Softmax(dim=-1)(score)
     return torch.matmul(score, v)
 
 class MultiHeadAttention(nn.Module):
@@ -48,20 +45,23 @@ class MultiHeadAttention(nn.Module):
         dk = d_model // h
         score = torch.FloatTensor(n, d_model)
 
-        for i in range(h):
-            wq_i = self.wq[i*d_model:(i*d_model+d_model), :]
-            wk_i = self.wk[i*d_model:(i*d_model+d_model), :]
-            wv_i = self.wv[i*d_model:(i*d_model+d_model), :]
-            q_bias_i = self.q_bias[i]
-            k_bias_i = self.k_bias[i]
-            v_bias_i = self.v_bias[i]
+        q = torch.matmul(x, self.wq) + self.q_bias
+        k = torch.matmul(x, self.wk) + self.k_bias
+        v = torch.matmul(x, self.wv) + self.v_bias
 
-            score[:, i*dk:(i*dk + dk)] = attention(
-                    x, wq_i, q_bias_i, wk_i, k_bias_i,
-                    wv_i, v_bias_i, dk)
+        for i in range(h):
+            qi = q[:, i*dk: (i+1)*dk]
+            ki = k[:, i*dk: (i+1)*dk]
+            vi = v[:, i*dk: (i+1)*dk]
+
+            score[:, i*dk:(i*dk + dk)] = attention(qi, ki, vi, dk)
+
+        dropout = Dropout()
+        (score, sel, scale) = dropout(score)  
 
         score = torch.matmul(score, self.wo) + self.o_bias
         score = score + x
+
         layernorm = LayerNorm(self.alpha, self.beta)
-        score = layernorm(score)
-        return score
+        out = layernorm(score)
+        return (out, sel, scale)

@@ -14,39 +14,59 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "dropout.h"
 #include "fmatmul.h"
 #include "layernorm.h"
 #include "matmul_opt.h"
 #include "riscv_vector.h"
 #include "self_attention.h"
+#include <stdint.h>
 
 void multihead_attention(float *x, float *o, float *wq, float *q_bias,
                          float *wk, float *k_bias, float *wv, float *v_bias,
                          float *wo, float *o_bias, float *alpha, float *beta,
-                         const int n, const int d_model, const int h) {
+                         uint8_t *sel, const float scale, const int n,
+                         const int d_model, const int h) {
   // column size of the Q, K, V matrices
   const int dk = d_model / h;
 
-  float mhsa[n * d_model] __attribute__((aligned(32 * NR_LANES)));
+  // =================================================
+  // Calculate Q, K, V
+  // =================================================
+
+  float q[n * d_model] __attribute__((aligned(32 * NR_LANES)));
+  float k[n * d_model] __attribute__((aligned(32 * NR_LANES)));
+  float v[n * d_model] __attribute__((aligned(32 * NR_LANES)));
+
+  fmatmul_bias(q, x, wq, q_bias, n, d_model, dk);
+  fmatmul_bias_transpose(k, x, wk, k_bias, n, d_model, dk);
+  fmatmul_bias(v, x, wv, v_bias, n, d_model, dk);
 
   // =================================================
-  // Calculate self-attention for each head
+  // Calculate self-attention score for each head
   // =================================================
+
+  float score[n * d_model] __attribute__((aligned(32 * NR_LANES)));
 
   for (int i = 0; i < h; i++) {
-    // self_attention(x, (mhsa + n * dk * i),
-    // mhsa + i * dk: the position of the first element of each head
-    self_attention(x, (mhsa + i * dk), (wq + d_model * dk * i),
-                   (q_bias + dk * i), (wk + d_model * dk * i),
-                   (k_bias + dk * i), (wv + d_model * dk * i),
-                   (v_bias + dk * i), n, d_model, dk);
+    // self_attention(x, (score + n * dk * i),
+    // score + i * dk: the position of the first element of each head
+    // FIXME
+    self_attention((score + i * dk), (q + i * dk), (k + i * dk), (v + i * dk),
+                   n, d_model, dk);
   }
 
   // =================================================
   // Linear transformation with Wo and Residual Connection
   // =================================================
 
-  fmatmul_add(o, mhsa, wo, o_bias, x, n, d_model, d_model);
+  fmatmul_add(o, score, wo, o_bias, x, n, d_model, d_model);
+
+  // =================================================
+  // Dropout
+  // =================================================
+
+  dropout_vec(n * d_model, o, scale, sel, o);
 
   // =================================================
   // Layer Normalization
@@ -60,31 +80,48 @@ void multihead_attention(float *x, float *o, float *wq, float *q_bias,
 void multihead_attention_t(float *x, float *o, float *wq, float *q_bias,
                            float *wk, float *k_bias, float *wv, float *v_bias,
                            float *wo, float *o_bias, float *alpha, float *beta,
-                           const int n, const int d_model, const int h) {
+                           uint8_t *sel, const float scale, const int n,
+                           const int d_model, const int h) {
   // column size of the Q, K, V matrices
   const int dk = d_model / h;
 
-  float mhsa[n * d_model] __attribute__((aligned(32 * NR_LANES)));
+  // =================================================
+  // Calculate Q, K, V (transposed)
+  // =================================================
+
+  float q[n * d_model] __attribute__((aligned(32 * NR_LANES)));
+  float k[n * d_model] __attribute__((aligned(32 * NR_LANES)));
+  float v[n * d_model] __attribute__((aligned(32 * NR_LANES)));
+
+  matmul_tb(q, x, wq, q_bias, 1, n, d_model, dk);
+  matmul_tb(k, x, wk, k_bias, 1, n, d_model, dk);
+  matmul_tb(v, x, wv, v_bias, 1, n, d_model, dk);
 
   // =================================================
-  // Calculate self-attention for each head
+  // Calculate self-attention score for each head
   // =================================================
+
+  float score[n * d_model] __attribute__((aligned(32 * NR_LANES)));
 
   for (int i = 0; i < h; i++) {
-    // self_attention(x, (mhsa + n * dk * i),
-    // mhsa + i * dk: the position of the first element of each head
-    self_attention_t(x, (mhsa + i * dk), (wq + d_model * dk * i),
-                     (q_bias + dk * i), (wk + d_model * dk * i),
-                     (k_bias + dk * i), (wv + d_model * dk * i),
-                     (v_bias + dk * i), n, d_model, dk);
+    // self_attention(x, (score + n * dk * i),
+    // score + i * dk: the position of the first element of each head
+    self_attention_t((score + i * dk), (q + i * dk * n), (k + i * dk * n),
+                     (v + i * dk * n), n, d_model, dk);
   }
+
+  // =================================================
+  // Dropout
+  // =================================================
+
+  dropout_vec(n * d_model, score, scale, sel, score);
 
   // =================================================
   // Linear transformation with Wo and Residual Connection
   // =================================================
 
-  // mhsa is not transposed (o is transposed)
-  matmul_ta(o, mhsa, wo, o_bias, x, 0, n, d_model, d_model);
+  // score is not transposed (o is transposed)
+  matmul_ta(o, score, wo, o_bias, x, 0, n, d_model, d_model);
 
   // =================================================
   // Layer Normalization

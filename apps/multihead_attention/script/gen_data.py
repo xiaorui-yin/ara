@@ -36,17 +36,25 @@ def emit(name, array, alignment='NR_LANES*32'):
 			s += "%02x" % bs[i+3-n]
 		print("    .word 0x%s" % s)
 
+def gen_sel_mask(sel):
+    # Generate the selection mask for vector data
+    SEL = []
+    for s in torch.reshape(sel, (-1, 8)):
+        SEL_ = ''.join(reversed(['1' if x else '0' for x in s]))
+        SEL.append(int(SEL_, 2))
+    return SEL
+
 (n, d_model, h, transpose) = (32, 64, 1, 1)
 dk = d_model // h
 
 # Generate inputs
 x = torch.randn((n, d_model)) * 3.14
-wq = torch.randn((h*d_model, dk)) * 3.14
-wk = torch.randn((h*d_model, dk)) * 3.14
-wv = torch.randn((h*d_model, dk)) * 3.14
-q_bias = torch.randn((h, dk)) * 3.14 
-k_bias = torch.randn((h, dk)) * 3.14
-v_bias = torch.randn((h, dk)) * 3.14
+wq = torch.randn((d_model, dk * h)) * 3.14
+wk = torch.randn((d_model, dk * h)) * 3.14
+wv = torch.randn((d_model, dk * h)) * 3.14
+q_bias = torch.randn((h * dk)) * 3.14 
+k_bias = torch.randn((h * dk)) * 3.14
+v_bias = torch.randn((h * dk)) * 3.14
 
 alpha = torch.randn(d_model) * 3.14
 beta = torch.randn(d_model) * 3.14
@@ -58,11 +66,12 @@ o = 10 * torch.randn((n, d_model))
 
 kernel = MultiHeadAttention(wq, q_bias, wk, k_bias, wv, v_bias,
         wo, o_bias, alpha, beta)
-o_gold = kernel(x, n, d_model, h)
 
-scale = math.sqrt(dk)
-wq /= scale
-q_bias /= scale
+(o_gold, sel, scale) = kernel(x, n, d_model, h)
+sel = gen_sel_mask(sel)
+
+wq /= math.sqrt(dk)
+q_bias /= math.sqrt(dk)
 
 if transpose == 1:
     x = torch.transpose(x, 0, 1)
@@ -73,6 +82,7 @@ emit("n", np.array(n, dtype=np.int32))
 emit("d_model", np.array(d_model, dtype=np.int32))
 emit("h", np.array(h, dtype=np.int32))
 emit("transpose", np.array(transpose, dtype=np.int32))
+emit("scale", np.array(scale, dtype=np.float32))
 
 emit("x", x.numpy().astype(np.float32), 'NR_LANES*32')
 emit("wk", wk.numpy().astype(np.float32), 'NR_LANES*32')
@@ -85,6 +95,8 @@ emit("k_bias", k_bias.numpy().astype(np.float32), 'NR_LANES*32')
 emit("o_bias", o_bias.numpy().astype(np.float32), 'NR_LANES*32')
 emit("alpha", alpha.numpy().astype(np.float32), 'NR_LANES*32')
 emit("beta", beta.numpy().astype(np.float32), 'NR_LANES*32')
+
+emit("sel", np.array(sel, dtype=np.uint8), 'NR_LANES*32')
 
 emit("o_gold", o_gold.numpy().astype(np.float32), 'NR_LANES*32')
 emit("o", o.numpy().astype(np.float32), 'NR_LANES*32')

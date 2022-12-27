@@ -17,6 +17,7 @@
 #include "common/common.h"
 #include "kernel/multihead_attention.h"
 #include <riscv_vector.h>
+#include <stdint.h>
 #include <stdio.h>
 
 #ifndef SPIKE
@@ -27,6 +28,7 @@
 
 extern const int n, d_model, h;
 extern const int transpose;
+extern const float scale;
 extern float x[] __attribute__((aligned(32 * NR_LANES)));
 extern float wq[] __attribute__((aligned(32 * NR_LANES)));
 extern float q_bias[] __attribute__((aligned(32 * NR_LANES)));
@@ -38,6 +40,7 @@ extern float wo[] __attribute__((aligned(32 * NR_LANES)));
 extern float o_bias[] __attribute__((aligned(32 * NR_LANES)));
 extern float alpha[] __attribute__((aligned(32 * NR_LANES)));
 extern float beta[] __attribute__((aligned(32 * NR_LANES)));
+extern uint8_t sel[] __attribute__((aligned(32 * NR_LANES)));
 extern float o_gold[] __attribute__((aligned(32 * NR_LANES)));
 extern float o[] __attribute__((aligned(32 * NR_LANES)));
 
@@ -58,10 +61,10 @@ int main() {
   start_timer();
   if (transpose == 0)
     multihead_attention(x, o, wq, q_bias, wk, k_bias, wv, v_bias, wo, o_bias,
-                        alpha, beta, n, d_model, h);
+                        alpha, beta, sel, scale, n, d_model, h);
   else
     multihead_attention_t(x, o, wq, q_bias, wk, k_bias, wv, v_bias, wo, o_bias,
-                          alpha, beta, n, d_model, h);
+                          alpha, beta, sel, scale, n, d_model, h);
 
   stop_timer();
 
@@ -94,10 +97,10 @@ int main() {
 #else
   if (transpose == 0)
     multihead_attention(x, o, wq, q_bias, wk, k_bias, wv, v_bias, wo, o_bias,
-                        alpha, beta, n, d_model, h);
+                        alpha, beta, sel, scale, n, d_model, h);
   else
     multihead_attention_t(x, o, wq, q_bias, wk, k_bias, wv, v_bias, wo, o_bias,
-                          alpha, beta, n, d_model, h);
+                          alpha, beta, sel, scale, n, d_model, h);
 #endif
 
   printf("Verifying result\n");

@@ -17,11 +17,10 @@
 #ifndef SELF_ATTENTION_H
 #define SELF_ATTENTION_H
 
-void self_attention(float *x, float *o, float *wq, float *q_bias, float *wk,
-                    float *k_bias, float *wv, float *v_bias, int n, int d_model,
+void self_attention(float *o, float *q, float *k, float *v, int n, int d_model,
                     int dk);
 
-void self_attention_t(float *x, float *o, float *wq, float *q_bias, float *wk,
-                      float *k_bias, float *wv, float *v_bias, int n,
+void self_attention_t(float *o, float *q, float *k, float *v, int n,
                       int d_model, int dk);
+
 #endif

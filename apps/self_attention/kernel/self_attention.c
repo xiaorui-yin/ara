@@ -24,25 +24,7 @@
 // uncomment if running self_attention test
 // #define SELF_ATTN_TEST
 
-void self_attention(float *x, float *o, float *wq, float *q_bias, float *wk,
-                    float *k_bias, float *wv, float *v_bias, int n, int d_model,
-                    int dk) {
-  // =================================================
-  // Calculate matrices Q, K, V (x * W + bias)
-  // =================================================
-
-  float q[n * dk] __attribute__((aligned(32 * NR_LANES)));
-  float k_t[dk * n] __attribute__((aligned(32 * NR_LANES)));
-  float v[n * dk] __attribute__((aligned(32 * NR_LANES)));
-
-  // Q
-  fmatmul_bias(q, x, wq, q_bias, n, d_model, dk);
-
-  // K^T
-  fmatmul_bias_transpose(k_t, x, wk, k_bias, n, d_model, dk);
-
-  // V
-  fmatmul_bias(v, x, wv, v_bias, n, d_model, dk);
+void self_attention(float *o, float *q, float *k, float *v, int n, int d_model, int dk){
 
   // =================================================
   // Calculate A = (Q * K^T) / sqrt(dk)
@@ -51,9 +33,7 @@ void self_attention(float *x, float *o, float *wq, float *q_bias, float *wk,
 
   float a[n * n] __attribute__((aligned(32 * NR_LANES)));
 
-  // float scale = 1.0 / (float)sqrt((double)dk);
-  // matmul_scaled(q, k_t, a, scale, n, dk, n, 0);
-  fmatmul(a, q, k_t, n, dk, n);
+  fmatmul(a, q, k, n, dk, n);
 
   // =================================================
   // A = softmax(A)
@@ -75,25 +55,9 @@ void self_attention(float *x, float *o, float *wq, float *q_bias, float *wk,
 
 // x: d_model x n
 // o: dk x n
-void self_attention_t(float *x, float *o, float *wq, float *q_bias, float *wk,
-                      float *k_bias, float *wv, float *v_bias, int n,
+// q, k, v are all transposed
+void self_attention_t(float *o, float *q, float *k, float *v, int n,
                       int d_model, int dk) {
-  // =================================================
-  // Calculate matrices Q, K, V (x * W + bias)
-  // =================================================
-
-  float q_t[n * dk] __attribute__((aligned(32 * NR_LANES)));
-  float k_t[dk * n] __attribute__((aligned(32 * NR_LANES)));
-  float v_t[n * dk] __attribute__((aligned(32 * NR_LANES)));
-
-  // Q^T
-  matmul_tb(q_t, x, wq, q_bias, 1, n, d_model, dk);
-
-  // K^T
-  matmul_tb(k_t, x, wk, k_bias, 1, n, d_model, dk);
-
-  // V^T
-  matmul_tb(v_t, x, wv, v_bias, 1, n, d_model, dk);
 
   // =================================================
   // Calculate A^T = (K * Q^T) / sqrt(dk)
@@ -104,7 +68,7 @@ void self_attention_t(float *x, float *o, float *wq, float *q_bias, float *wk,
 
   // float scale = 1.0 / (float)sqrt((double)dk);
   // matmul_scaled(q, k_t, a, scale, n, dk, n, 0);
-  matmul_t(a_t, q_t, k_t, 1, n, n, dk, n);
+  matmul_t(a_t, q, k, 1, n, n, dk, n);
 
   // =================================================
   // A = softmax(A)
@@ -118,8 +82,8 @@ void self_attention_t(float *x, float *o, float *wq, float *q_bias, float *wk,
   // =================================================
 
 #ifndef SELF_ATTN_TEST
-  matmul_t(o, v_t, a_t_, 0, d_model, dk, n, n);
+  matmul_t(o, v, a_t_, 0, d_model, dk, n, n);
 #else
-  matmul_t(o, v_t, a_t_, 0, dk, dk, n, n);
+  matmul_t(o, v, a_t_, 0, dk, dk, n, n);
 #endif
 }
