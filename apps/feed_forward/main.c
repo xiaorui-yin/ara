@@ -66,13 +66,15 @@ int main() {
   // Performance metrics
   int64_t runtime = get_timer();
   float d_ff = 4.0 * d_model;
-  float layernorm_ops = (9.0 * n * d_model + n * 2);
-  float layernorm_ops_ = (8.0 * n * d_model + n * 2); // 1 MAC operation
-  float performance = (layernorm_ops + 4 * n * d_ff * d_model + n * d_ff +
-                       n * d_model + 2 * n * d_ff) /
-                      runtime;
-  float performance_ = (layernorm_ops_ + 2 * n * d_ff * d_model + n * d_ff +
-                        n * d_model + 2 * n * d_ff) /
+  float layernorm_ops = (7.0 * n * d_model + n * 4);
+  float layernorm_ops_ = layernorm_ops;
+  float matmul_ops = 2.0 * n * d_model * d_ff * 2;
+  float matmul_ops_ = 1.0 * n * d_model * d_ff * 2;
+  float performance =
+      (layernorm_ops + matmul_ops + n * d_ff + n * d_model * 2 + 2 * n * d_ff) /
+      runtime;
+  float performance_ = (layernorm_ops_ + matmul_ops_ + n * d_ff +
+                        n * d_model * 2 + 2 * n * d_ff) /
                        runtime;
   float utilization = 100.0 * performance_ / (2.0 * NR_LANES);
 
