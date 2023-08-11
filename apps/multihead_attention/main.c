@@ -73,23 +73,22 @@ int main() {
 
   float dk = d_model / h;
 
-  float softmax_ops = n * n * 32;
-  float softmax_ops_ = n * n * 25;
-  float self_attention_ops = 2.0 * n * dk * n * 2 + softmax_ops;
-  float self_attention_ops_ = 1.0 * n * dk * n * 2 + softmax_ops_;
+  float softmax_ops = n * n * (3 * 28 + 7);
+  float softmax_ops_ = n * n * (3 * 21 + 7);
+  float self_attention_ops =
+      (6 * n * d_model * dk + 3 * n * dk + 4 * n * n * dk + softmax_ops);
+  float self_attention_ops_ =
+      (3 * n * d_model * dk + 3 * n * dk + 2 * n * n * dk + softmax_ops_);
 
-  float layernorm_ops = (7.0 * n * d_model + n * 4);
-  float layernorm_ops_ = layernorm_ops;
+  float layernorm_ops = (9.0 * n * d_model + n * 2);
+  float layernorm_ops_ = (8.0 * n * d_model + n * 2); // 1 MAC operation
 
-  float other_ops =
-      2.0 * n * d_model * d_model * 4 + n * d_model * 5 + n * d_model;
-  float other_ops_ =
-      1.0 * n * d_model * d_model * 4 + n * d_model * 5 + n * d_model;
-
-  float performance =
-      (float)(self_attention_ops * h + layernorm_ops + other_ops) / runtime;
-  float performance_ =
-      (float)(self_attention_ops_ * h + layernorm_ops_ + other_ops_) / runtime;
+  float performance = (float)(self_attention_ops * h + layernorm_ops +
+                              2 * n * d_model * d_model + 2 * n * d_model) /
+                      runtime;
+  float performance_ = (float)(self_attention_ops_ * h + layernorm_ops_ +
+                               n * d_model * d_model + 2 * n * d_model) /
+                       runtime;
   float utilization = (float)100 * performance_ / (2.0 * NR_LANES);
 
   printf("The execution took %d cycles.\n", runtime);

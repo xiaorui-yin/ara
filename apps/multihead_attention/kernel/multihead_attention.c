@@ -38,9 +38,9 @@ void multihead_attention(float *x, float *o, float *wq, float *q_bias,
   float k[n * d_model] __attribute__((aligned(32 * NR_LANES)));
   float v[n * d_model] __attribute__((aligned(32 * NR_LANES)));
 
-  fmatmul_bias(q, x, wq, q_bias, n, d_model, d_model);
-  fmatmul_bias_transpose(k, x, wk, k_bias, n, d_model, d_model);
-  fmatmul_bias(v, x, wv, v_bias, n, d_model, d_model);
+  fmatmul_bias(q, x, wq, q_bias, n, d_model, dk);
+  fmatmul_bias_transpose(k, x, wk, k_bias, n, d_model, dk);
+  fmatmul_bias(v, x, wv, v_bias, n, d_model, dk);
 
   // =================================================
   // Calculate self-attention score for each head
@@ -93,9 +93,9 @@ void multihead_attention_t(float *x, float *o, float *wq, float *q_bias,
   float k[n * d_model] __attribute__((aligned(32 * NR_LANES)));
   float v[n * d_model] __attribute__((aligned(32 * NR_LANES)));
 
-  matmul_tb(q, x, wq, q_bias, 1, n, d_model, d_model);
-  matmul_tb(k, x, wk, k_bias, 1, n, d_model, d_model);
-  matmul_tb(v, x, wv, v_bias, 1, n, d_model, d_model);
+  matmul_tb(q, x, wq, q_bias, 1, n, d_model, dk);
+  matmul_tb(k, x, wk, k_bias, 1, n, d_model, dk);
+  matmul_tb(v, x, wv, v_bias, 1, n, d_model, dk);
 
   // =================================================
   // Calculate self-attention score for each head
