@@ -45,7 +45,7 @@ def gen_sel_mask(sel):
         SEL.append(int(SEL_, 2))
     return SEL
 
-(row, col) = (64, 1280)
+(row, col) = (64, 64)
 p = 0.1
 
 # Generate inputs

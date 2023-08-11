@@ -44,7 +44,7 @@ def gen_sel_mask(sel):
         SEL.append(int(SEL_, 2))
     return SEL
 
-(n, d_model, h, transpose) = (32, 128, 4, 1)
+(n, d_model, h, transpose) = (32, 64, 2, 0)
 dk = d_model // h
 
 # Generate inputs

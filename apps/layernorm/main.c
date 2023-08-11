@@ -57,13 +57,10 @@ int main() {
 
   // Performance metrics
   int64_t runtime = get_timer();
-  float performance;
-  if (transpose == 0)
-    performance = (7.0 * row * col + row * 4) / runtime;
-  else
-    performance = (7.0 * row * col + col * 4) / runtime;
-
-  float utilization = 100 * performance / (2.0 * NR_LANES);
+  float performance = (9.0 * row * col + row * 2) / runtime;
+  float performance_1 =
+      (8.0 * row * col + row * 2) / runtime; // 1 MAC operation
+  float utilization = 100 * performance_1 / (2.0 * NR_LANES);
 
   printf("The execution took %d cycles.\n", runtime);
   printf("The performance is %f SP-FLOP/cycle (%f%% utilization).\n",

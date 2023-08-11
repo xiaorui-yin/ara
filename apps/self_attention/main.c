@@ -58,10 +58,14 @@ int main() {
 
   // Performance metrics
   int64_t runtime = get_timer();
-  float softmax_ops = n * n * 32;
-  float softmax_ops_ = n * n * 25;
-  float performance = (2.0 * n * dk * n * 2 + softmax_ops) / (float)runtime;
-  float performance_ = (1.0 * n * dk * n * 2 + softmax_ops_) / (float)runtime;
+  float softmax_ops = n * n * (3 * 28 + 7);
+  float softmax_ops_ = n * n * (3 * 21 + 7);
+  float performance =
+      (6 * n * d_model * dk + 3 * n * dk + 4 * n * n * dk + softmax_ops) /
+      (float)runtime;
+  float performance_ =
+      (3 * n * d_model * dk + 3 * n * dk + 2 * n * n * dk + softmax_ops_) /
+      (float)runtime;
   float utilization = 100.0 * performance_ / (2.0 * NR_LANES);
 
   printf("The execution took %d cycles.\n", runtime);
