@@ -11,8 +11,10 @@ module ara_system import axi_pkg::*; import ara_pkg::*; #(
     parameter int                      unsigned NrLanes            = 0,                               // Number of parallel vector lanes.
     // Support for floating-point data types
     parameter fpu_support_e                     FPUSupport         = FPUSupportHalfSingleDouble,
+    // External support for vfrec7, vfrsqrt7
+    parameter fpext_support_e                   FPExtSupport       = FPExtSupportEnable,
     // Support for fixed-point data types
-    parameter  logic                            FixPtSupport       = FixedPointEnable,
+    parameter fixpt_support_e                   FixPtSupport       = FixedPointEnable,
     // Ariane configuration
     parameter ariane_pkg::ariane_cfg_t          ArianeCfg          = ariane_pkg::ArianeDefaultConfig,
     // AXI Interface
@@ -45,6 +47,7 @@ module ara_system import axi_pkg::*; import ara_pkg::*; #(
     input  logic                    clk_i,
     input  logic                    rst_ni,
     input  logic             [63:0] boot_addr_i,
+    input                     [2:0] hart_id_i,
     // Scan chain
     input  logic                    scan_enable_i,
     input  logic                    scan_data_i,
@@ -85,6 +88,10 @@ module ara_system import axi_pkg::*; import ara_pkg::*; #(
   logic                                 inval_valid;
   logic                                 inval_ready;
 
+  // Support max 8 cores, for now
+  logic [63:0] hart_id;
+  assign hart_id = {'0, hart_id_i};
+
 `ifdef IDEAL_DISPATCHER
   // Perfect dispatcher to Ara
   accel_dispatcher_ideal i_accel_dispatcher_ideal (
@@ -104,7 +111,7 @@ module ara_system import axi_pkg::*; import ara_pkg::*; #(
     .clk_i            (clk_i                 ),
     .rst_ni           (rst_ni                ),
     .boot_addr_i      (boot_addr_i           ),
-    .hart_id_i        ('0                    ),
+    .hart_id_i        (hart_id               ),
     .irq_i            ('0                    ),
     .ipi_i            ('0                    ),
     .time_irq_i       ('0                    ),
@@ -186,6 +193,8 @@ module ara_system import axi_pkg::*; import ara_pkg::*; #(
   ara #(
     .NrLanes     (NrLanes         ),
     .FPUSupport  (FPUSupport      ),
+    .FPExtSupport(FPExtSupport    ),
+    .FixPtSupport(FixPtSupport    ),
     .AxiDataWidth(AxiWideDataWidth),
     .AxiAddrWidth(AxiAddrWidth    ),
     .axi_ar_t    (ara_axi_ar_t    ),

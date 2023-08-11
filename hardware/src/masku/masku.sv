@@ -72,6 +72,9 @@ module masku import ara_pkg::*; import rvv_pkg::*; #(
   logic  [NrLanes-1:0] masku_operand_m_valid_i;
   logic  [NrLanes-1:0] masku_operand_m_ready_o;
 
+  // Insn-queue related signal
+  pe_req_t vinsn_issue;
+
   for (genvar lane = 0; lane < NrLanes; lane++) begin: gen_unpack_masku_operands
     assign masku_operand_a_i[lane]       = masku_operand_i[lane][2 + masku_operand_fu];
     assign masku_operand_a_valid_i[lane] = masku_operand_valid_i[lane][2 + masku_operand_fu];
@@ -114,7 +117,6 @@ module masku import ara_pkg::*; import rvv_pkg::*; #(
   assign vinsn_queue_full = (vinsn_queue_q.commit_cnt == VInsnQueueDepth);
 
   // Do we have a vector instruction ready to be issued?
-  pe_req_t vinsn_issue;
   logic    vinsn_issue_valid;
   assign vinsn_issue       = vinsn_queue_q.vinsn[0];
   assign vinsn_issue_valid = (vinsn_queue_q.issue_cnt != '0);
@@ -257,7 +259,7 @@ module masku import ara_pkg::*; import rvv_pkg::*; #(
 
   // iteration count for masked instrctions
   always_comb begin
-    if (vinsn_issue_valid && masku_operand_a_valid_i) begin
+    if (vinsn_issue_valid && &masku_operand_a_valid_i) begin
       iteration_count_d = iteration_count_q + 1'b1;
     end else begin
       iteration_count_d = iteration_count_q;
@@ -292,6 +294,7 @@ module masku import ara_pkg::*; import rvv_pkg::*; #(
   logic  [NrLanes*ELEN-1:0]              bit_enable;
   logic  [NrLanes*ELEN-1:0]              bit_enable_shuffle;
   logic  [NrLanes*ELEN-1:0]              bit_enable_mask;
+  rvv_pkg::vew_e                         bit_enable_shuffle_eew;
   logic  [NrLanes*ELEN-1:0]              mask;
   logic  [NrLanes*ELEN-1:0]              vcpop_operand;
   logic  [$clog2(DataWidth*NrLanes):0]   popcount;
@@ -347,6 +350,11 @@ module masku import ara_pkg::*; import rvv_pkg::*; #(
     masku_operand_vd    = '0;
     vcpop_operand       = '0;
 
+    // Comparisons work on vtype.vsew from VALU or VMFPU
+    bit_enable_shuffle_eew = vinsn_issue.op inside {[VMFEQ:VMSGTU], [VMSGT:VMSBC]}
+                           ? vinsn_issue.vtype.vsew
+                           : vinsn_issue.eew_vd_op;
+
     if (vinsn_issue_valid) begin
       // Calculate bit enable
       // The result can be taken either from the result of an operation (mask_operand_a_i), or
@@ -362,7 +370,7 @@ module masku import ara_pkg::*; import rvv_pkg::*; #(
 
       // Shuffle the bit enable signal
       for (int b = 0; b < NrLanes*StrbWidth; b++) begin
-        automatic int vrf_byte              = shuffle_index(b, NrLanes, vinsn_issue.eew_vd_op);
+        automatic int vrf_byte              = shuffle_index(b, NrLanes, bit_enable_shuffle_eew);
         bit_enable_shuffle[8*vrf_byte +: 8] = bit_enable[8*b +: 8];
 
         // Take the mask into account
@@ -390,7 +398,7 @@ module masku import ara_pkg::*; import rvv_pkg::*; #(
       // Mask generation
       unique case (vinsn_issue.op) inside
         [VMSBF:VID] :
-          if (masku_operand_a_valid_i) begin
+          if (&masku_operand_a_valid_i) begin
             unique case (vinsn_issue.vtype.vsew)
               EW8 : for (int i = 0; i < (DataWidth * NrLanes)/8; i++)
                       mask [(i*8) +: 8]   = {8{bit_enable_mask [i+(((DataWidth * NrLanes)/8)*(iteration_count_d-1))]}};
@@ -491,7 +499,7 @@ module masku import ara_pkg::*; import rvv_pkg::*; #(
             (masku_operand_b_i & ~bit_enable_shuffle);
         end
         [VMSBF:VMSIF] : begin
-            if (masku_operand_a_valid_i) begin
+            if (&masku_operand_a_valid_i) begin
                 for (int i = 0; i < NrLanes * DataWidth; i++) begin
                     if (alu_operand_b_seq[i] == 1'b0) begin
                         alu_result_vm[i] = (vinsn_issue.op == VMSOF) ? 1'b0 : not_found_one_d;
@@ -507,7 +515,7 @@ module masku import ara_pkg::*; import rvv_pkg::*; #(
             end
         end
         VIOTA: begin
-          if (masku_operand_a_valid_i) begin
+          if (&masku_operand_a_valid_i) begin
             alu_operand_b_seq_m = alu_operand_b_seq & bit_enable_mask;
             unique case (vinsn_issue.vtype.vsew)
               EW8 : begin
@@ -558,7 +566,7 @@ module masku import ara_pkg::*; import rvv_pkg::*; #(
           end
         end
         VID: begin
-          if (masku_operand_a_valid_i) begin
+          if (&masku_operand_a_valid_i) begin
             unique case (vinsn_issue.vtype.vsew)
               EW8 : begin
                 for (int index = 1; index < (NrLanes*DataWidth)/8; index++) begin
@@ -679,6 +687,16 @@ module masku import ara_pkg::*; import rvv_pkg::*; #(
     result_scalar_d       = result_scalar_o;
     result_scalar_valid_d = result_scalar_valid_o;
 
+    // Balance the incoming valid
+    unbalanced_a = (|commit_cnt_q[idx_width(NrLanes)-1:0] != 1'b0) ? 1'b1 : 1'b0;
+    last_incoming_a = ((commit_cnt_q - vrf_pnt_q) < NrLanes) ? 1'b1 : 1'b0;
+    fake_a_valid[0] = 1'b0;
+    for (int unsigned i = 1; i < NrLanes; i++)
+      if (i >= {1'b0, commit_cnt_q[idx_width(NrLanes)-1:0]})
+        fake_a_valid[i] = last_incoming_a & unbalanced_a;
+      else
+        fake_a_valid = 1'b0;
+
     /////////////////////
     //  Mask Operands  //
     /////////////////////
@@ -761,7 +779,7 @@ module masku import ara_pkg::*; import rvv_pkg::*; #(
 
     // Is there an instruction ready to be issued?
     if (vinsn_issue_valid && vd_scalar(vinsn_issue.op)) begin
-      if (masku_operand_a_valid_i) begin
+      if (&(masku_operand_a_valid_i | fake_a_valid) && (&masku_operand_m_valid_i || vinsn_issue.vm)) begin
 
         masku_operand_a_ready_o = masku_operand_a_valid_i;
 
@@ -773,11 +791,8 @@ module masku import ara_pkg::*; import rvv_pkg::*; #(
         // Acknowledge the operands, also triggers another beat if necessary
         if (!vinsn_issue.vm) masku_operand_m_ready_o = '1;
 
-        // Adding the popcount and vfirst_count from all streams of operands
-        if (|masku_operand_a_valid_i) begin
-          popcount_d     = popcount_q + popcount;
-          vfirst_count_d = vfirst_count_q + vfirst_count;
-        end
+        popcount_d     = popcount_q + popcount;
+        vfirst_count_d = vfirst_count_q + vfirst_count;
 
         // if this is the last beat, commit the result to the scalar_result queue
         if (iteration_count_d >= (((8 << vinsn_issue.vtype.vsew)*vinsn_issue.vl)/(DataWidth*NrLanes))) begin
@@ -794,15 +809,6 @@ module masku import ara_pkg::*; import rvv_pkg::*; #(
     //////////////////////////////////
     //  Write results to the lanes  //
     //////////////////////////////////
-
-    unbalanced_a = (|commit_cnt_q[idx_width(NrLanes)-1:0] != 1'b0) ? 1'b1 : 1'b0;
-    last_incoming_a = ((commit_cnt_q - vrf_pnt_q) < NrLanes) ? 1'b1 : 1'b0;
-    fake_a_valid[0] = 1'b0;
-    for (int unsigned i = 1; i < NrLanes; i++)
-      if (i >= {1'b0, commit_cnt_q[idx_width(NrLanes)-1:0]})
-        fake_a_valid[i] = last_incoming_a & unbalanced_a;
-      else
-        fake_a_valid = 1'b0;
 
     // Is there an instruction ready to be issued?
     if (vinsn_issue_valid && !vd_scalar(vinsn_issue.op)) begin
@@ -918,7 +924,7 @@ module masku import ara_pkg::*; import rvv_pkg::*; #(
     //// Masked Instruction ///
     ///////////////////////////
     if (vinsn_commit_valid && vinsn_commit.op inside {[VMSBF:VID]}) begin
-      if (masku_operand_a_valid_i && (masku_operand_m_valid_i || vinsn_issue.vm)) begin
+      if (&masku_operand_a_valid_i && (&masku_operand_m_valid_i || vinsn_issue.vm)) begin
         // if this is the last beat, commit the result to the scalar_result queue
         commit_cnt_d = commit_cnt_q - (1 << (int'(EW64) - vinsn_commit.vtype.vsew));
         if ((vinsn_commit.vl-commit_cnt_d)*4 >= vinsn_commit.vl) begin

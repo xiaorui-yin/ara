@@ -65,6 +65,20 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
  - Solve duplicate verify function in `roi_align`
  - Don't let the lanes sample more than once the same instruction when the workload is unbalanced and the instruction stalls in the main sequencer
  - Don't mute instructions on mask vectors in the lane sequencer when `vl == 0` in that lane
+ - Remove unintentional latches from `valu`, `simd_mul`, `lane_sequencer`
+ - Fix `vxsat` CSR update in `dispatcher`
+ - Fix parameter passing through the hierarchy for fixed point support
+ - Decouple `cmdBuffer` and `dataBuffer` depths in opQueues
+ - Avoid handshaking wrong results in VMFPU
+ - Fix eew reshuffle for mask logical operations
+ - Fix eew reshuffle for `vmv.v.v` operations
+ - Remove timing loop between `vmfpu` and `operand_requesters`
+ - Solve some of the Warnings from SpyGlass run
+ - Fix masku handshake. All the lanes should handshake together in input
+ - Start solving `sldu` counter widths warnings
+ - Fix `vslideup` wrong counter trimming
+ - Reset gating registers before the integer multipliers in `vmfpu`
+ - Fix narrowing for `vnclip` and `vnclipu`
 
 ### Added
 
@@ -112,6 +126,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
  - Add support for cache warming before benchmarks
  - Add support to check the results of the ideal dispatcher runs
  - Add HW/SW environment for automatic VCD dumping
+ - Support for vector floating-point reciprocal estimate instruction: `vfrec7`
+ - Support for vector floating-point reciprocal square-root estimate instruction: `vfrsqrt7`
+ - Support for vector narrowing floating-point convert instruction: `vfncvt.rod.f.f`
+ - Parametrize `vfrec7`, `vfrsqrt7` and `vfncvt.rod.f.f` support
+ - Add guards in the testbench to successfully compile in post-layout simulations
+ - Add VCD dumping features to `imatmul`
+ - `core_id_i` added to the interface of the system
+ - Clock-gate the system bank macros when not used (VRF, D$, I$)
+ - Spill register on `sldu` input signals to better isolate the unit
 
 ### Changed
 
@@ -152,6 +175,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
  - Almost align all the vector/matrix sizes in `benchmark.sh`
  - Generate data for `fmatmul` at compile time
  - SIMD multipliers are now power gated
+ - Roll-back to Verilator v4.214
+ - Parametrize `addrgen` queue depth
+ - SIMD-multipliers are now gated singularly depending on VSEW
+ - Optimize `pathfinder` kernel
+ - Optimize `dwt` kernel
+ - Optimize `dotproduct` kernel
+ - Optimize `fft` kernel
+ - Simplify the reduction engine for both `valu` and `vmfpu`, to avoid spurious valid signals to the `sldu`
+ - Fix commit for `dtc` installation (`spike` dependency)
+ - Simplify the datapath of the slide unit. The `sldu` supports only powers of two, and cannot slide and reshuffle at the same time. Non-power-of-two slides are now handled with micro operations.
 
 ## 2.2.0 - 2021-11-02
 

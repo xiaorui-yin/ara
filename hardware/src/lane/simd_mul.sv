@@ -11,14 +11,14 @@
 
 module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
     // Support for fixed-point data types
-    parameter  logic          FixPtSupport = FixedPointEnable,
+    parameter  fixpt_support_e FixPtSupport = FixedPointEnable,
     // SIMD-multiplier parameters
-    parameter  int   unsigned NumPipeRegs  = 0,
-    parameter  vew_e          ElementWidth = EW64,
+    parameter  int    unsigned NumPipeRegs  = 0,
+    parameter  vew_e           ElementWidth = EW64,
     // Dependant parameters. DO NOT CHANGE!
-    localparam int   unsigned DataWidth    = $bits(elen_t),
-    localparam int   unsigned StrbWidth    = DataWidth/8,
-    localparam type           strb_t       = logic [DataWidth/8-1:0]
+    localparam int    unsigned DataWidth    = $bits(elen_t),
+    localparam int    unsigned StrbWidth    = DataWidth/8,
+    localparam type            strb_t       = logic [DataWidth/8-1:0]
   ) (
     input  logic       clk_i,
     input  logic       rst_ni,
@@ -162,6 +162,9 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
     end : gen_mul
 
     always_comb begin : p_mul
+      // Default assignment
+      result_o = '0;
+
       unique case (op)
         // Single-Width integer multiply instructions
         VMUL: for (int l = 0; l < 1; l++) result_o[64*l +: 64] = mul_res.w128[l][63:0];

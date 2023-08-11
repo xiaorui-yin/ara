@@ -12,8 +12,10 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
     parameter int           unsigned NrLanes      = 0,
     // Support for floating-point data types
     parameter fpu_support_e          FPUSupport   = FPUSupportHalfSingleDouble,
+    // External support for vfrec7, vfrsqrt7
+    parameter fpext_support_e        FPExtSupport = FPExtSupportEnable,
     // Support for fixed-point data types
-    parameter logic                  FixPtSupport = FixedPointEnable
+    parameter fixpt_support_e        FixPtSupport = FixedPointEnable
   ) (
     // Clock and reset
     input  logic                                 clk_i,
@@ -140,7 +142,8 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
   typedef enum logic [1:0] {
     NORMAL_OPERATION,
     WAIT_IDLE,
-    RESHUFFLE
+    RESHUFFLE,
+    SLDU_SEQUENCER
   } state_e;
   state_e state_d, state_q;
 
@@ -220,6 +223,20 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
   `FF(load_complete_q, load_complete_i, 1'b0)
   `FF(store_complete_q, store_complete_i, 1'b0)
 
+  // NP2 Slide support
+  logic is_stride_np2;
+  logic [idx_width(idx_width(VLENB << 3)):0] sldu_popc;
+
+  // Is the stride power of two?
+  popcount #(
+    .INPUT_WIDTH (idx_width(VLENB << 3))
+  ) i_np2_stride (
+    .data_i    (ara_req_d.stride[idx_width(VLENB << 3)-1:0]),
+    .popcount_o(sldu_popc                                  )
+  );
+
+  assign is_stride_np2 = sldu_popc > 1;
+
   ///////////////
   //  Decoder  //
   ///////////////
@@ -250,7 +267,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
 
     illegal_insn = 1'b0;
     vxsat_d      = vxsat_q;
-    vxrm_d      = vxrm_q;
+    vxrm_d       = vxrm_q;
 
     is_vload      = 1'b0;
     is_vstore     = 1'b0;
@@ -297,11 +314,8 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
     is_config            = 1'b0;
     ignore_zero_vl_check = 1'b0;
 
-    // The token must change at every new instruction
-    ara_req_d.token = (ara_req_valid_o && ara_req_ready_i) ? ~ara_req_o.token : ara_req_o.token;
-
     // Saturation in any lane will raise vxsat flag
-    vxsat_d = |vxsat_flag_i;
+    vxsat_d |= |vxsat_flag_i;
     // Fixed-point rounding mode is applied to all lanes
     for (int lane = 0; lane < NrLanes; lane++) alu_vxrm_o[lane] = vxrm_q;
     // Rounding mode is shared between all lanes
@@ -630,6 +644,13 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                   6'b010111: begin
                     ara_req_d.op      = ara_pkg::VMERGE;
                     ara_req_d.use_vs2 = !insn.varith_type.vm; // vmv.v.v does not use vs2
+                    // With a normal vmv.v.v, copy input eew to output
+                    // to avoid unnecessary reshuffles
+                    if (insn.varith_type.vm) begin
+                      ara_req_d.eew_vs1    = eew_q[ara_req_d.vs1];
+                      ara_req_d.vtype.vsew = eew_q[ara_req_d.vs1];
+                      ara_req_d.vl         = (vl_q << vtype_q.vsew[1:0]) >> ara_req_d.eew_vs1[1:0];
+                    end
                   end
                   6'b100000: ara_req_d.op = ara_pkg::VSADDU;
                   6'b100001: ara_req_d.op = ara_pkg::VSADD;
@@ -736,6 +757,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                 ara_req_d.vd            = insn.varith_type.rd;
                 ara_req_d.use_vd        = 1'b1;
                 ara_req_d.vm            = insn.varith_type.vm;
+                ara_req_d.is_stride_np2 = is_stride_np2;
                 ara_req_valid_d         = 1'b1;
 
                 // Decode based on the func6 field
@@ -948,6 +970,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                 ara_req_d.vd            = insn.varith_type.rd;
                 ara_req_d.use_vd        = 1'b1;
                 ara_req_d.vm            = insn.varith_type.vm;
+                ara_req_d.is_stride_np2 = is_stride_np2;
                 ara_req_valid_d         = 1'b1;
 
                 // Decode based on the func6 field
@@ -1270,35 +1293,70 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                   6'b001011: ara_req_d.op = ara_pkg::VASUB;
                   6'b011000: begin
                     ara_req_d.op        = ara_pkg::VMANDNOT;
-                    ara_req_d.use_vd_op = 1'b1;
+                    // Prefer mask operation on EW8 encoding
+                    // In mask operations, vs1, vs2, vd should
+                    // have the same encoding.
+                    ara_req_d.eew_vs1    = EW8;
+                    ara_req_d.eew_vs2    = EW8;
+                    ara_req_d.eew_vd_op  = EW8;
+                    ara_req_d.vtype.vsew = EW8;
+                    ara_req_d.use_vd_op  = 1'b1;
                   end
                   6'b011001: begin
-                    ara_req_d.op        = ara_pkg::VMAND;
-                    ara_req_d.use_vd_op = 1'b1;
+                    ara_req_d.op         = ara_pkg::VMAND;
+                    ara_req_d.eew_vs1    = EW8;
+                    ara_req_d.eew_vs2    = EW8;
+                    ara_req_d.eew_vd_op  = EW8;
+                    ara_req_d.vtype.vsew = EW8;
+                    ara_req_d.use_vd_op  = 1'b1;
                   end
                   6'b011010: begin
-                    ara_req_d.op        = ara_pkg::VMOR;
-                    ara_req_d.use_vd_op = 1'b1;
+                    ara_req_d.op         = ara_pkg::VMOR;
+                    ara_req_d.eew_vs1    = EW8;
+                    ara_req_d.eew_vs2    = EW8;
+                    ara_req_d.eew_vd_op  = EW8;
+                    ara_req_d.vtype.vsew = EW8;
+                    ara_req_d.use_vd_op  = 1'b1;
                   end
                   6'b011011: begin
-                    ara_req_d.op        = ara_pkg::VMXOR;
-                    ara_req_d.use_vd_op = 1'b1;
+                    ara_req_d.op         = ara_pkg::VMXOR;
+                    ara_req_d.eew_vs1    = EW8;
+                    ara_req_d.eew_vs2    = EW8;
+                    ara_req_d.eew_vd_op  = EW8;
+                    ara_req_d.vtype.vsew = EW8;
+                    ara_req_d.use_vd_op  = 1'b1;
                   end
                   6'b011100: begin
-                    ara_req_d.op        = ara_pkg::VMORNOT;
-                    ara_req_d.use_vd_op = 1'b1;
+                    ara_req_d.op         = ara_pkg::VMORNOT;
+                    ara_req_d.eew_vs1    = EW8;
+                    ara_req_d.eew_vs2    = EW8;
+                    ara_req_d.eew_vd_op  = EW8;
+                    ara_req_d.vtype.vsew = EW8;
+                    ara_req_d.use_vd_op  = 1'b1;
                   end
                   6'b011101: begin
-                    ara_req_d.op        = ara_pkg::VMNAND;
-                    ara_req_d.use_vd_op = 1'b1;
+                    ara_req_d.op         = ara_pkg::VMNAND;
+                    ara_req_d.eew_vs1    = EW8;
+                    ara_req_d.eew_vs2    = EW8;
+                    ara_req_d.eew_vd_op  = EW8;
+                    ara_req_d.vtype.vsew = EW8;
+                    ara_req_d.use_vd_op  = 1'b1;
                   end
                   6'b011110: begin
-                    ara_req_d.op        = ara_pkg::VMNOR;
-                    ara_req_d.use_vd_op = 1'b1;
+                    ara_req_d.op         = ara_pkg::VMNOR;
+                    ara_req_d.eew_vs1    = EW8;
+                    ara_req_d.eew_vs2    = EW8;
+                    ara_req_d.eew_vd_op  = EW8;
+                    ara_req_d.vtype.vsew = EW8;
+                    ara_req_d.use_vd_op  = 1'b1;
                   end
                   6'b011111: begin
-                    ara_req_d.op        = ara_pkg::VMXNOR;
-                    ara_req_d.use_vd_op = 1'b1;
+                    ara_req_d.op         = ara_pkg::VMXNOR;
+                    ara_req_d.eew_vs1    = EW8;
+                    ara_req_d.eew_vs2    = EW8;
+                    ara_req_d.eew_vd_op  = EW8;
+                    ara_req_d.vtype.vsew = EW8;
+                    ara_req_d.use_vd_op  = 1'b1;
                   end
                   6'b010010: begin // VXUNARY0
                     // These instructions do not use vs1
@@ -1566,6 +1624,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                 ara_req_d.vd            = insn.varith_type.rd;
                 ara_req_d.use_vd        = 1'b1;
                 ara_req_d.vm            = insn.varith_type.vm;
+                ara_req_d.is_stride_np2 = is_stride_np2;
                 ara_req_valid_d         = 1'b1;
 
                 // Decode based on the func6 field
@@ -1968,6 +2027,11 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                           ara_req_d.cvt_resize     = CVT_NARROW;
                           ara_req_d.eew_vs2        = vtype_q.vsew.next();
                         end
+                        5'b10101: begin // Narrowing VFNCVTRODFF
+                          ara_req_d.op             = VFNCVTRODFF;
+                          ara_req_d.cvt_resize     = CVT_NARROW;
+                          ara_req_d.eew_vs2        = vtype_q.vsew.next();
+                        end
                         5'b10110: begin // Narrowing VFCVTRTZXUF
                           ara_req_d.op             = VFCVTRTZXUF;
                           ara_req_d.cvt_resize     = CVT_NARROW;
@@ -1992,6 +2056,8 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
 
                     unique case (insn.varith_type.rs1)
                       5'b00000: ara_req_d.op = ara_pkg::VFSQRT;
+                      5'b00100: ara_req_d.op = ara_pkg::VFRSQRT7;
+                      5'b00101: ara_req_d.op = ara_pkg::VFREC7;
                       5'b10000: ara_req_d.op = ara_pkg::VFCLASS;
                       default : illegal_insn = 1'b1;
                     endcase
@@ -2209,6 +2275,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                   ara_req_d.vd            = insn.varith_type.rd;
                   ara_req_d.use_vd        = 1'b1;
                   ara_req_d.vm            = insn.varith_type.vm;
+                  ara_req_d.is_stride_np2 = is_stride_np2;
                   ara_req_d.fp_rm         = acc_req_i.frm;
                   ara_req_valid_d         = 1'b1;
 
@@ -2906,7 +2973,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                     else acc_resp_o.error                                 = 1'b1;
                   end
                   riscv::CSR_VXRM: begin
-                    vxrm_d            = vxrm_q | vlen_t'(acc_req_i.rs1[1:0]);
+                    vxrm_d            = vxrm_q | vxrm_t'(acc_req_i.rs1[1:0]);
                     acc_resp_o.result = vlen_t'(vxrm_q);
                   end
                   riscv::CSR_VXSAT: begin
@@ -2958,7 +3025,8 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                     acc_resp_o.result = vlen_t'(vxrm_q);
                   end
                   riscv::CSR_VXSAT: begin
-                    vxsat_d           = acc_req_i.insn.itype.rs1[0];
+                    // logic [19:15] rs1; So, LSB is [15]
+                    vxsat_d           = acc_req_i.insn.itype.rs1[15];
                     acc_resp_o.result = vxsat_q;
                   end
                   default: acc_resp_o.error = 1'b1;
@@ -2987,7 +3055,8 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                     else acc_resp_o.error                                 = 1'b1;
                   end
                   riscv::CSR_VXSAT: begin
-                    vxsat_d           = vxsat_q | vxsat_e'(acc_req_i.insn.itype.rs1[0]);
+                    // logic [19:15] rs1; So, LSB is [15]
+                    vxsat_d           = vxsat_q | vxsat_e'(acc_req_i.insn.itype.rs1[15]);
                     acc_resp_o.result = vxsat_q;
                   end
                   default: acc_resp_o.error = 1'b1;
@@ -3016,7 +3085,8 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                     else acc_resp_o.error                                 = 1'b1;
                   end
                   riscv::CSR_VXSAT: begin
-                    vxsat_d           = vxsat_q & ~vxsat_e'(acc_req_i.insn.itype.rs1[0]);
+                    // logic [19:15] rs1; So, LSB is [15]
+                    vxsat_d           = vxsat_q & ~vxsat_e'(acc_req_i.insn.itype.rs1[15]);
                     acc_resp_o.result = vxsat_q;
                   end
                   default: acc_resp_o.error = 1'b1;
@@ -3043,13 +3113,18 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
       if (ara_req_valid_d && (ara_req_d.op inside {[VSADDU:VNCLIPU], VSMUL}) && (FixPtSupport == FixedPointDisable))
         illegal_insn = 1'b1;
 
+      // Check that we have we have vfrec7, vfrsqrt7
+      if (ara_req_valid_d && (ara_req_d.op inside {VFREC7, VFRSQRT7}) && (FPExtSupport == FPExtSupportDisable))
+        illegal_insn = 1'b1;
+
       // Check if we need to reshuffle our vector registers involved in the operation
       // This operation is costly when occurs, so avoid it if possible
       if (ara_req_valid_d && !acc_resp_o.error) begin
         automatic rvv_instruction_t insn = rvv_instruction_t'(acc_req_i.insn.instr);
 
         // Is the instruction an in-lane one and could it be subject to reshuffling?
-        in_lane_op = ara_req_d.op inside {[VADD:VNSRA]} || ara_req_d.op inside {[VREDSUM:VMSBC]};
+        in_lane_op = ara_req_d.op inside {[VADD:VMERGE]} || ara_req_d.op inside {[VREDSUM:VMSBC]} ||
+                     ara_req_d.op inside {[VMANDNOT:VMXNOR]} || ara_req_d.op inside {VSLIDEUP, VSLIDEDOWN};
         // Annotate which registers need a reshuffle -> |vs1|vs2|vd|
         // Optimization: reshuffle vs1 and vs2 only if the operation is strictly in-lane
         // Optimization: reshuffle vd only if we are not overwriting the whole vector register!
@@ -3170,6 +3245,9 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
 
     acc_resp_o.load_complete  = load_zero_vl  | load_complete_q;
     acc_resp_o.store_complete = store_zero_vl | store_complete_q;
+
+    // The token must change at every new instruction
+    ara_req_d.token = (ara_req_valid_o && ara_req_ready_i) ? ~ara_req_o.token : ara_req_o.token;
   end: p_decoder
 
 endmodule : ara_dispatcher

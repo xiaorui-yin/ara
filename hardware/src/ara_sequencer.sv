@@ -379,6 +379,7 @@ module ara_sequencer import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::i
               use_scalar_op : ara_req_i.use_scalar_op,
               swap_vs2_vd_op: ara_req_i.swap_vs2_vd_op,
               stride        : ara_req_i.stride,
+              is_stride_np2 : ara_req_i.is_stride_np2,
               vd            : ara_req_i.vd,
               use_vd        : ara_req_i.use_vd,
               emul          : ara_req_i.emul,
@@ -577,7 +578,10 @@ module ara_sequencer import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::i
   assign accepted_insn_stalled = accepted_insn & ~ara_req_ready_o;
 
   // Masked instructions do use the mask unit as well
-  assign target_vfus_vec = target_vfus(ara_req_i.op) | (!ara_req_i.vm << VFU_MaskUnit);
+  always_comb begin
+    target_vfus_vec                = target_vfus(ara_req_i.op);
+    target_vfus_vec[VFU_MaskUnit] |= ~ara_req_i.vm;
+  end
 
   // One counter per VFU
   for (genvar i = 0; i < NrVFUs; i++) begin : gen_seq_fu_cnt

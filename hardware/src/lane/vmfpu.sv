@@ -12,8 +12,10 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
     parameter  int           unsigned NrLanes      = 0,
     // Support for floating-point data types
     parameter  fpu_support_e          FPUSupport   = FPUSupportHalfSingleDouble,
+    // External support for vfrec7, vfrsqrt7, rounding-toward-odd
+    parameter  fpext_support_e        FPExtSupport = FPExtSupportEnable,
     // Support for fixed-point data types
-    parameter  logic                  FixPtSupport = FixedPointEnable,
+    parameter  fixpt_support_e        FixPtSupport = FixedPointEnable,
     // Type used to address vector register file elements
     parameter  type                   vaddr_t      = logic,
     // Dependant parameters. DO NOT CHANGE!
@@ -304,10 +306,15 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
   // Only for power-saving purposes
   // The pipeline inside the multipliers is passive and always enabled
   // Masking the inputs is almost necessary since their logic cone is huge
-  elen_t vmul_simd_op_a_gated, vmul_simd_op_b_gated, vmul_simd_op_c_gated;
-  strb_t vmul_simd_mask_gated;
-  ara_op_e vmul_simd_op_gated;
-  logic [3:0] vmul_simd_in_valid_gated;
+  elen_t vmul_simd_op_a_q, vmul_simd_op_b_q, vmul_simd_op_c_q;
+  strb_t vmul_simd_mask_q;
+  ara_op_e vmul_simd_op_q;
+  elen_t [3:0] vmul_simd_op_a_q_gated;
+  elen_t [3:0] vmul_simd_op_b_q_gated;
+  elen_t [3:0] vmul_simd_op_c_q_gated;
+  strb_t [3:0] vmul_simd_mask_q_gated;
+  ara_op_e [3:0] vmul_simd_op_q_gated;
+  logic [3:0] vmul_simd_in_valid_q;
   logic gate_ff_en, gate_ff_clr;
 
   // Enable if the next stage is ready
@@ -316,18 +323,81 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
   assign gate_ff_clr = vmul_simd_in_ready[vinsn_processing_q.vtype.vsew] &
                       ~vmul_simd_in_valid[vinsn_issue_q.vtype.vsew];
 
-  `FFLSR(vmul_simd_op_a_gated, vinsn_issue_q.use_scalar_op ? scalar_op : mfpu_operand_i[0],
-    gate_ff_en, '0, clk_i, gate_ff_clr);
-  `FFLSR(vmul_simd_op_b_gated, mfpu_operand_i[1],
-    gate_ff_en, '0, clk_i, gate_ff_clr);
-  `FFLSR(vmul_simd_op_c_gated, mfpu_operand_i[2],
-    gate_ff_en, '0, clk_i, gate_ff_clr);
-  `FFLSR(vmul_simd_mask_gated, mask_i,
-    gate_ff_en, '0, clk_i, gate_ff_clr);
-  `FFLSR(vmul_simd_op_gated, vinsn_issue_q.op,
-    gate_ff_en, ara_op_e'('0), clk_i, gate_ff_clr);
-  `FFLSR(vmul_simd_in_valid_gated, vmul_simd_in_valid,
-    gate_ff_en, '0, clk_i, gate_ff_clr);
+  `FFLARNC(vmul_simd_op_a_q, vinsn_issue_q.use_scalar_op ? scalar_op : mfpu_operand_i[0],
+    gate_ff_en, gate_ff_clr, '0, clk_i, rst_ni);
+  `FFLARNC(vmul_simd_op_b_q, mfpu_operand_i[1],
+    gate_ff_en, gate_ff_clr, '0, clk_i, rst_ni);
+  `FFLARNC(vmul_simd_op_c_q, mfpu_operand_i[2],
+    gate_ff_en, gate_ff_clr, '0, clk_i, rst_ni);
+  `FFLARNC(vmul_simd_mask_q, mask_i,
+    gate_ff_en, gate_ff_clr, '0, clk_i, rst_ni);
+  `FFLARNC(vmul_simd_op_q, vinsn_issue_q.op,
+    gate_ff_en, gate_ff_clr, ara_op_e'('0), clk_i, rst_ni);
+  `FFLARNC(vmul_simd_in_valid_q, vmul_simd_in_valid,
+    gate_ff_en, gate_ff_clr, '0, clk_i, rst_ni);
+
+  for (genvar i = 0; i < 4; i++) begin
+`ifdef GF22
+    power_gating_gf22 #(
+`else
+    power_gating_generic #(
+`endif
+      .T        (elen_t),
+      .NO_GLITCH(1'b0  )
+    ) i_simd_mul_gating_op_a (
+      .in_i (vmul_simd_op_a_q         ),
+      .en_i (vmul_simd_in_valid_q[i]  ),
+      .out_o(vmul_simd_op_a_q_gated[i])
+    );
+`ifdef GF22
+    power_gating_gf22 #(
+`else
+    power_gating_generic #(
+`endif
+      .T(elen_t),
+      .NO_GLITCH(1'b0  )
+    ) i_simd_mul_gating_op_b (
+      .in_i  (vmul_simd_op_b_q         ),
+      .en_i  (vmul_simd_in_valid_q[i]  ),
+      .out_o (vmul_simd_op_b_q_gated[i])
+    );
+`ifdef GF22
+    power_gating_gf22 #(
+`else
+    power_gating_generic #(
+`endif
+      .T(elen_t),
+      .NO_GLITCH(1'b0  )
+    ) i_simd_mul_gating_op_c (
+      .in_i  (vmul_simd_op_c_q         ),
+      .en_i  (vmul_simd_in_valid_q[i]  ),
+      .out_o (vmul_simd_op_c_q_gated[i])
+    );
+`ifdef GF22
+    power_gating_gf22 #(
+`else
+    power_gating_generic #(
+`endif
+      .T(strb_t),
+      .NO_GLITCH(1'b0  )
+    ) i_simd_mul_gating_mask (
+      .in_i  (vmul_simd_mask_q         ),
+      .en_i  (vmul_simd_in_valid_q[i]  ),
+      .out_o (vmul_simd_mask_q_gated[i])
+    );
+`ifdef GF22
+    power_gating_gf22 #(
+`else
+    power_gating_generic #(
+`endif
+      .T(ara_op_e),
+      .NO_GLITCH(1'b0  )
+    ) i_simd_mul_gating_op (
+      .in_i  (vmul_simd_op_q         ),
+      .en_i  (vmul_simd_in_valid_q[i]),
+      .out_o (vmul_simd_op_q_gated[i])
+    );
+  end
 
   simd_mul #(
     .FixPtSupport(FixPtSupport     ),
@@ -336,16 +406,16 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
   ) i_simd_mul_ew64 (
     .clk_i      (clk_i                         ),
     .rst_ni     (rst_ni                        ),
-    .operand_a_i(vmul_simd_op_a_gated          ),
-    .operand_b_i(vmul_simd_op_b_gated          ),
-    .operand_c_i(vmul_simd_op_c_gated          ),
-    .mask_i     (vmul_simd_mask_gated          ),
-    .op_i       (vmul_simd_op_gated            ),
+    .operand_a_i(vmul_simd_op_a_q_gated[EW64]  ),
+    .operand_b_i(vmul_simd_op_b_q_gated[EW64]  ),
+    .operand_c_i(vmul_simd_op_c_q_gated[EW64]  ),
+    .mask_i     (vmul_simd_mask_q_gated[EW64]  ),
+    .op_i       (vmul_simd_op_q_gated[EW64]    ),
     .vxsat_o    (mfpu_vxsat[EW64]              ),
     .vxrm_i     (mfpu_vxrm_i                   ),
     .result_o   (vmul_simd_result[EW64]        ),
     .mask_o     (vmul_simd_mask[EW64]          ),
-    .valid_i    (vmul_simd_in_valid_gated[EW64]),
+    .valid_i    (vmul_simd_in_valid_q[EW64]    ),
     .ready_o    (vmul_simd_in_ready[EW64]      ),
     .ready_i    (vmul_simd_out_ready[EW64]     ),
     .valid_o    (vmul_simd_out_valid[EW64]     )
@@ -358,16 +428,16 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
   ) i_simd_mul_ew32 (
     .clk_i      (clk_i                         ),
     .rst_ni     (rst_ni                        ),
-    .operand_a_i(vmul_simd_op_a_gated          ),
-    .operand_b_i(vmul_simd_op_b_gated          ),
-    .operand_c_i(vmul_simd_op_c_gated          ),
-    .mask_i     (vmul_simd_mask_gated          ),
-    .op_i       (vmul_simd_op_gated            ),
+    .operand_a_i(vmul_simd_op_a_q_gated[EW32]  ),
+    .operand_b_i(vmul_simd_op_b_q_gated[EW32]  ),
+    .operand_c_i(vmul_simd_op_c_q_gated[EW32]  ),
+    .mask_i     (vmul_simd_mask_q_gated[EW32]  ),
+    .op_i       (vmul_simd_op_q_gated[EW32]    ),
     .vxsat_o    (mfpu_vxsat[EW32]              ),
     .vxrm_i     (mfpu_vxrm_i                   ),
     .result_o   (vmul_simd_result[EW32]        ),
     .mask_o     (vmul_simd_mask[EW32]          ),
-    .valid_i    (vmul_simd_in_valid_gated[EW32]),
+    .valid_i    (vmul_simd_in_valid_q[EW32]    ),
     .ready_o    (vmul_simd_in_ready[EW32]      ),
     .ready_i    (vmul_simd_out_ready[EW32]     ),
     .valid_o    (vmul_simd_out_valid[EW32]     )
@@ -380,16 +450,16 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
   ) i_simd_mul_ew16 (
     .clk_i      (clk_i                         ),
     .rst_ni     (rst_ni                        ),
-    .operand_a_i(vmul_simd_op_a_gated          ),
-    .operand_b_i(vmul_simd_op_b_gated          ),
-    .operand_c_i(vmul_simd_op_c_gated          ),
-    .mask_i     (vmul_simd_mask_gated          ),
-    .op_i       (vmul_simd_op_gated            ),
+    .operand_a_i(vmul_simd_op_a_q_gated[EW16]  ),
+    .operand_b_i(vmul_simd_op_b_q_gated[EW16]  ),
+    .operand_c_i(vmul_simd_op_c_q_gated[EW16]  ),
+    .mask_i     (vmul_simd_mask_q_gated[EW16]  ),
+    .op_i       (vmul_simd_op_q_gated[EW16]    ),
     .result_o   (vmul_simd_result[EW16]        ),
     .vxsat_o    (mfpu_vxsat[EW16]              ),
     .vxrm_i     (mfpu_vxrm_i                   ),
     .mask_o     (vmul_simd_mask[EW16]          ),
-    .valid_i    (vmul_simd_in_valid_gated[EW16]),
+    .valid_i    (vmul_simd_in_valid_q[EW16]    ),
     .ready_o    (vmul_simd_in_ready[EW16]      ),
     .ready_i    (vmul_simd_out_ready[EW16]     ),
     .valid_o    (vmul_simd_out_valid[EW16]     )
@@ -402,16 +472,16 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
   ) i_simd_mul_ew8 (
     .clk_i      (clk_i                         ),
     .rst_ni     (rst_ni                        ),
-    .operand_a_i(vmul_simd_op_a_gated          ),
-    .operand_b_i(vmul_simd_op_b_gated          ),
-    .operand_c_i(vmul_simd_op_c_gated          ),
-    .mask_i     (vmul_simd_mask_gated          ),
-    .op_i       (vmul_simd_op_gated            ),
+    .operand_a_i(vmul_simd_op_a_q_gated[EW8]   ),
+    .operand_b_i(vmul_simd_op_b_q_gated[EW8]   ),
+    .operand_c_i(vmul_simd_op_c_q_gated[EW8]   ),
+    .mask_i     (vmul_simd_mask_q_gated[EW8]   ),
+    .op_i       (vmul_simd_op_q_gated[EW8]     ),
     .vxsat_o    (mfpu_vxsat[EW8]               ),
     .vxrm_i     (mfpu_vxrm_i                   ),
     .result_o   (vmul_simd_result[EW8]         ),
     .mask_o     (vmul_simd_mask[EW8]           ),
-    .valid_i    (vmul_simd_in_valid_gated[EW8] ),
+    .valid_i    (vmul_simd_in_valid_q[EW8]     ),
     .ready_o    (vmul_simd_in_ready[EW8]       ),
     .ready_i    (vmul_simd_out_ready[EW8]      ),
     .valid_o    (vmul_simd_out_valid[EW8]      )
@@ -531,9 +601,15 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
 
   // Signal to indicate the state of the MFPU
   typedef enum logic [2:0] {
+<<<<<<< HEAD
     NO_REDUCTION, INTRA_LANE_REDUCTION, INTER_LANES_REDUCTION,
     WAIT_STATE, SIMD_REDUCTION, OSUM_REDUCTION, MFPU_WAIT,
     BC_MAC
+=======
+    NO_REDUCTION, INTRA_LANE_REDUCTION, INTER_LANES_REDUCTION_TX,
+    INTER_LANES_REDUCTION_RX, LN0_REDUCTION_COMMIT, SIMD_REDUCTION,
+    OSUM_REDUCTION, MFPU_WAIT
+>>>>>>> upstream/main
   } mfpu_state_e;
   mfpu_state_e mfpu_state_d, mfpu_state_q;
 
@@ -698,7 +774,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
 
   // FPU-related signals
   elen_t         vfpu_result, vfpu_processed_result;
-  status_t       vfpu_ex_flag;
+  status_t       vfpu_ex_flag, vfpu_ex_flag_fn;
   strb_t         vfpu_mask;
   logic          vfpu_in_valid;
   logic          vfpu_out_valid;
@@ -726,7 +802,6 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
 
   // fp_sign is used in control block
   logic [2:0] fp_sign;
-
   // Is the FPU enabled?
   if (FPUSupport != FPUSupportNone) begin : fpu_gen
     // Features (enabled formats, vectors etc.)
@@ -813,7 +888,11 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
           fp_op = MINMAX;
           fp_rm = RTZ;
         end
-        VFCLASS: fp_op = CLASSIFY;
+        VFCLASS,
+        VFREC7,
+        VFRSQRT7: begin
+          fp_op = CLASSIFY;
+        end
         VFSGNJ : begin
           fp_op = SGNJ;
           fp_rm = RNE;
@@ -877,6 +956,10 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
           fp_rm    = RTZ;
         end
         VFCVTFF: fp_op = F2F;
+        VFNCVTRODFF: begin
+          fp_op = F2F;
+          fp_rm = ROD;
+        end
         VFREDUSUM, VFWREDUSUM, VFREDOSUM, VFWREDOSUM: fp_op = ADD;
         VFREDMIN: begin
           fp_op = MINMAX;
@@ -952,32 +1035,206 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
       .TrueSIMDClass (TrueSIMDClass    ),
       .MaskType      (fpu_mask_t       )
     ) i_fpnew_bulk (
-      .clk_i         (clk_i         ),
-      .rst_ni        (rst_ni        ),
-      .flush_i       (1'b0          ),
-      .rnd_mode_i    (fp_rm         ),
-      .op_i          (fp_op         ),
-      .op_mod_i      (fp_opmod      ),
-      .vectorial_op_i(1'b1          ),
-      .operands_i    (vfpu_operands ),
-      .tag_i         (vfpu_tag_in   ),
-      .simd_mask_i   (vfpu_simd_mask),
-      .src_fmt_i     (fp_src_fmt    ),
-      .dst_fmt_i     (fp_dst_fmt    ),
-      .int_fmt_i     (fp_int_fmt    ),
-      .in_valid_i    (vfpu_in_valid ),
-      .in_ready_o    (vfpu_in_ready ),
-      .result_o      (vfpu_result   ),
-      .status_o      (vfpu_ex_flag  ),
-      .tag_o         (vfpu_tag_out  ),
-      .out_valid_o   (vfpu_out_valid),
-      .out_ready_i   (vfpu_out_ready),
-      .busy_o        (/* Unused */  )
+      .clk_i         (clk_i          ),
+      .rst_ni        (rst_ni         ),
+      .flush_i       (1'b0           ),
+      .rnd_mode_i    (fp_rm          ),
+      .op_i          (fp_op          ),
+      .op_mod_i      (fp_opmod       ),
+      .vectorial_op_i(1'b1           ),
+      .operands_i    (vfpu_operands  ),
+      .tag_i         (vfpu_tag_in    ),
+      .simd_mask_i   (vfpu_simd_mask ),
+      .src_fmt_i     (fp_src_fmt     ),
+      .dst_fmt_i     (fp_dst_fmt     ),
+      .int_fmt_i     (fp_int_fmt     ),
+      .in_valid_i    (vfpu_in_valid  ),
+      .in_ready_o    (vfpu_in_ready  ),
+      .result_o      (vfpu_result    ),
+      .status_o      (vfpu_ex_flag_fn),
+      .tag_o         (vfpu_tag_out   ),
+      .out_valid_o   (vfpu_out_valid ),
+      .out_ready_i   (vfpu_out_ready ),
+      .busy_o        (/* Unused */   )
     );
 
+    ////////////////////////
+    // VFREC7 & VFRSQRT7 //
+    ///////////////////////
+
+    elen_t operand_a_delay, vfrec7_result_o, vfrsqrt7_result_o;
+
+    fpu_mask_t vfpu_flag_mask;
+
+    vf7_flag_out_e16 vfrec7_out_e16[4];
+    vf7_flag_out_e32 vfrec7_out_e32[2];
+    vf7_flag_out_e64 vfrec7_out_e64[1];
+
+    status_t vfrec7_ex_flag, vfrsqrt7_ex_flag;
+
+    roundmode_e fp_rm_process;
+
+    elen_t [LatFNonComp:0]   operand_a_d, vfpu_flag_mask_d;
+
+    vf7_flag_out_e16 vfrsqrt7_out_e16[4];
+    vf7_flag_out_e32 vfrsqrt7_out_e32[2];
+    vf7_flag_out_e64 vfrsqrt7_out_e64[1];
+
+    logic [15:0] lzc_e16;
+    logic [9:0]  lzc_e32;
+    logic [5:0]  lzc_e64;
+
+    // Leading zeros modules
+    localparam int unsigned SIG_BITS_E16   = 10;
+    localparam int unsigned SIG_BITS_E32   = 23;
+    localparam int unsigned SIG_BITS_E64   = 52;
+
+    if (FPExtSupport) begin
+      //Pipeline Stages
+      assign operand_a_d[0]     = operand_a;
+      assign vfpu_flag_mask_d[0]= vfpu_simd_mask;
+      for (genvar i = 0; i < LatFNonComp; i++) begin
+
+        `FF(operand_a_d[i+1], operand_a_d[i], '0, clk_i, rst_ni);
+
+        `FF(vfpu_flag_mask_d[i+1], vfpu_flag_mask_d[i],'0,clk_i,rst_ni);
+        end
+
+      assign operand_a_delay = operand_a_d[LatFNonComp];
+      assign vfpu_flag_mask  = vfpu_flag_mask_d[LatFNonComp];
+
+      // sew: 16-bit
+      for (genvar i = 0; i < 4; i = i + 1) begin
+        lzc #(
+          .WIDTH(SIG_BITS_E16),
+          .MODE (1           )
+        ) leading_zero_e16_i (
+           .in_i    (operand_a_delay[(16*i)+(SIG_BITS_E16-1):(16*i)]),
+           .cnt_o   (lzc_e16[(4*i)+3:(4*i)]                         ),
+           .empty_o ( /*Unused*/                                    )
+        );
+      end
+
+      // sew: 32-bit
+      for (genvar j = 0; j < 2; j = j + 1) begin
+        lzc #(
+          .WIDTH(SIG_BITS_E32),
+          .MODE (1           )
+        ) leading_zero_e32_i (
+          .in_i    (operand_a_delay[(32*j)+(SIG_BITS_E32-1):(32*j)]),
+          .cnt_o   (lzc_e32[(5*j)+4:(5*j)]                         ),
+          .empty_o ( /*Unused*/                                    )
+        );
+      end
+
+      // sew: 64-bit
+      lzc #(
+        .WIDTH(SIG_BITS_E64),
+        .MODE (1           )
+      ) leading_zero_e64 (
+        .in_i    (operand_a_delay[SIG_BITS_E64-1:0]),
+        .cnt_o   (lzc_e64                          ),
+        .empty_o ( /*Unused*/                      )
+      );
+    end
+
+    assign   fp_rm_process = vinsn_processing_q.fp_rm;
+
     always_comb begin: fpu_result_processing_p
-      // Forward the result
-      vfpu_processed_result = vfpu_result;
+
+      if (FPExtSupport) begin
+
+        // vfrec7
+        unique case (vinsn_processing_q.vtype.vsew)
+          EW16: begin
+            for (int h = 0; h < 4; h++) vfrec7_out_e16[h] =
+              vfrec7_fp16(vfpu_result[h*16 +: 10], operand_a_delay[h*16 +: 16], fp_rm_process);
+
+            vfrec7_result_o = {vfrec7_out_e16[3].vf7_e16, vfrec7_out_e16[2].vf7_e16,
+                               vfrec7_out_e16[1].vf7_e16, vfrec7_out_e16[0].vf7_e16};
+
+            vfrec7_ex_flag  = (vfrec7_out_e16[3].ex_flag & {5{vfpu_flag_mask[3]}})
+                            | (vfrec7_out_e16[2].ex_flag & {5{vfpu_flag_mask[2]}})
+                            | (vfrec7_out_e16[1].ex_flag & {5{vfpu_flag_mask[1]}})
+                            | (vfrec7_out_e16[0].ex_flag & {5{vfpu_flag_mask[0]}});
+          end
+          EW32: begin
+            for (int w = 0; w < 2; w++) vfrec7_out_e32[w] =
+              vfrec7_fp32(vfpu_result[w*32 +: 10], operand_a_delay[w*32 +: 32], fp_rm_process);
+
+            vfrec7_result_o = {vfrec7_out_e32[1].vf7_e32, vfrec7_out_e32[0].vf7_e32};
+
+            vfrec7_ex_flag  = (vfrec7_out_e32[1].ex_flag & {5{vfpu_flag_mask[2]}})
+                            | (vfrec7_out_e32[0].ex_flag & {5{vfpu_flag_mask[0]}});
+          end
+          EW64: begin
+            for (int d = 0; d < 1; d++) vfrec7_out_e64[d] =
+              vfrec7_fp64(vfpu_result[d*64 +: 10], operand_a_delay[d*64 +: 64], fp_rm_process);
+
+            vfrec7_result_o  =  vfrec7_out_e64[0].vf7_e64;
+
+            vfrec7_ex_flag   =  vfrec7_out_e64[0].ex_flag & {5{vfpu_flag_mask[0]}};
+          end
+          default: begin
+            vfrec7_result_o = 'x;
+            vfrec7_ex_flag  = 'x;
+          end
+        endcase
+
+       //vfrsqrt7
+        unique case (vinsn_processing_q.vtype.vsew)
+          EW16: begin
+            for (int h = 0; h < 4; h++) vfrsqrt7_out_e16[h] =
+              vfrsqrt7_fp16(vfpu_result[h*16 +: 10], operand_a_delay[h*16 +: 16], lzc_e16[h*4 +: 4]);
+
+            vfrsqrt7_result_o = {vfrsqrt7_out_e16[3].vf7_e16, vfrsqrt7_out_e16[2].vf7_e16,
+                                 vfrsqrt7_out_e16[1].vf7_e16, vfrsqrt7_out_e16[0].vf7_e16};
+
+            vfrsqrt7_ex_flag = (vfrsqrt7_out_e16[3].ex_flag & {5{vfpu_flag_mask[3]}})
+                             | (vfrsqrt7_out_e16[2].ex_flag & {5{vfpu_flag_mask[2]}})
+                             | (vfrsqrt7_out_e16[1].ex_flag & {5{vfpu_flag_mask[1]}})
+                             | (vfrsqrt7_out_e16[0].ex_flag & {5{vfpu_flag_mask[0]}});
+          end
+          EW32: begin
+            for (int w = 0; w < 2; w++) vfrsqrt7_out_e32[w] =
+              vfrsqrt7_fp32(vfpu_result[w*32 +: 10], operand_a_delay[w*32 +: 32], lzc_e32[w*5 +: 5]);
+
+            vfrsqrt7_result_o = {vfrsqrt7_out_e32[1].vf7_e32, vfrsqrt7_out_e32[0].vf7_e32};
+
+            vfrsqrt7_ex_flag = (vfrsqrt7_out_e32[1].ex_flag & {5{vfpu_flag_mask[2]}})
+                             | (vfrsqrt7_out_e32[0].ex_flag & {5{vfpu_flag_mask[0]}});
+          end
+          EW64: begin
+            for (int d = 0; d < 1; d++) vfrsqrt7_out_e64[d] =
+              vfrsqrt7_fp64(vfpu_result[d*64 +: 10], operand_a_delay[d*64 +: 64], lzc_e64[d*6 +: 6]);
+
+            vfrsqrt7_result_o = vfrsqrt7_out_e64[0].vf7_e64;
+
+            vfrsqrt7_ex_flag = vfrsqrt7_out_e64[0].ex_flag & {5{vfpu_flag_mask[0]}};
+          end
+          default: begin
+            vfrsqrt7_result_o = 'x;
+            vfrsqrt7_ex_flag  = 'x;
+          end
+        endcase
+
+        // Forward the result
+        if (vinsn_processing_q.op == VFREC7) begin
+          vfpu_processed_result = vfrec7_result_o;
+          vfpu_ex_flag          = vfrec7_ex_flag;
+        end else if(vinsn_processing_q.op == VFRSQRT7) begin
+          vfpu_processed_result = vfrsqrt7_result_o;
+          vfpu_ex_flag          = vfrsqrt7_ex_flag;
+        end else begin
+          vfpu_processed_result = vfpu_result;
+          vfpu_ex_flag          = vfpu_ex_flag_fn;
+        end
+      end else begin
+        // NO vfrec7, vfrsqrt7
+        vfpu_processed_result = vfpu_result;
+        vfpu_ex_flag          = vfpu_ex_flag_fn;
+      end
+
       // After a comparison, send the mask back to the mask unit
       // 1) Negate the result if op == VMFNE (fpnew does not natively support a not-equal comparison)
       // 2) Encode the mask in the bit after each comparison result
@@ -1079,9 +1336,9 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
     vfpu_in_valid = 1'b0;
 
     // If the result queue is not full, it is ready to accept a result
-    vmul_out_ready = ~result_queue_full;
-    vdiv_out_ready = ~result_queue_full;
-    vfpu_out_ready = ~result_queue_full;
+    vmul_out_ready = ~result_queue_full && (vinsn_processing_q.op inside {[VMUL:VSMUL]});
+    vdiv_out_ready = ~result_queue_full && (vinsn_processing_q.op inside {[VDIVU:VREM]});
+    vfpu_out_ready = ~result_queue_full && (vinsn_processing_q.op inside {[VFADD:VMFGE]});
 
     // Valid of the unit in use (i.e., result queue input valid) is not asserted by default
     unit_out_valid  = 1'b0;
@@ -1274,7 +1531,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
             unit_out_result = vdiv_result;
             unit_out_mask   = vdiv_mask;
           end
-          [VFADD:VFCVTFF], [VMFEQ:VMFGE]: begin
+          [VFADD:VMFGE]: begin
             unit_out_valid  = vfpu_out_valid;
             unit_out_result = vfpu_processed_result;
             unit_out_mask   = vfpu_mask;
@@ -1428,7 +1685,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
             first_result_op_valid_d = 1'b1;
 
             // Finished processing the micro-operations of this vector instruction
-            if (to_process_cnt_d == '0) mfpu_state_d = INTER_LANES_REDUCTION;
+            if (to_process_cnt_d == '0) mfpu_state_d = INTER_LANES_REDUCTION_TX;
           end else
             result_queue_valid_d[result_queue_write_pnt_q] = 1'b0;
 
@@ -1539,91 +1796,107 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
           end
         end
       end
-      INTER_LANES_REDUCTION: begin
+      INTER_LANES_REDUCTION_TX: begin
         // If the workload is unbalanced and some lanes already have commit_cnt == '0,
         // delay the commit until we are over with the inter-lanes phase
         prevent_commit = 1'b1;
+        // If the lane is inactive, don't wait for a valid FPU output
         if (reduction_rx_cnt_q == '0) begin
+          mfpu_red_valid_o = 1'b1;
+          if (mfpu_red_ready_i) begin
+            mfpu_state_d = INTER_LANES_REDUCTION_RX;
+            // Clear the result queue
+            result_queue_valid_d[result_queue_write_pnt_q] = 1'b0;
+          end
+        end else begin
           // Wait until the operand is valid in the result queue
           if (result_queue_valid_q[result_queue_write_pnt_q]) begin
             // This unit has finished processing data for this reduction instruction, send the partial result to the sliding unit
             mfpu_red_valid_o = 1'b1;
-            // We can simply delay the ready since we will immediately change state,
-            // so, no risk to re-sample alu_red_ready_i with side effects
-            if (mfpu_red_ready_q) begin
-              mfpu_state_d = WAIT_STATE;
-              // Disable the used operand
-              result_queue_valid_d[result_queue_write_pnt_q] = 1'b0;
+            if (mfpu_red_ready_i) begin
+              mfpu_state_d = INTER_LANES_REDUCTION_RX;
             end
           end
-        end else begin
-          // This unit should still process data for the inter-lane reduction.
-          // Ready to accept incoming operands from the slide unit.
-          mfpu_red_valid_o = red_hs_synch_q;
-
-          operand_a = sldu_operand_q;
-          operand_b = result_queue_q[result_queue_write_pnt_q].wdata;
-          operand_c = sldu_operand_q;
-          // operand_b comes from the result_queue, operand_c comes from other lanes throught the slide unit
-          operands_valid = result_queue_valid_q[result_queue_write_pnt_q] && sldu_mfpu_valid_q;
-
-          if (operands_valid) begin
-            // Issue the operation
-            vfpu_in_valid = 1'b1;
-            if (vfpu_in_ready) begin
-              // Acknowledge operand_c from the slide unit
-              sldu_mfpu_ready_d = 1'b1;
-              // Disable the used operand
-              result_queue_valid_d[result_queue_write_pnt_q] = 1'b0;
-              reduction_rx_cnt_d = reduction_rx_cnt_q - 1;
-            end
-          end
-        end
-
-        // Count the successful transaction with the SLDU
-        if (sldu_mfpu_valid_q && sldu_mfpu_ready_d) sldu_transactions_cnt_d = sldu_transactions_cnt_q - 1;
-        if (mfpu_red_valid_o && mfpu_red_ready_i) red_hs_synch_d = 1'b0;
-        if (sldu_mfpu_valid_q && sldu_mfpu_ready_d) red_hs_synch_d = 1'b1;
-
-        // Accumulate the result
-        if (vfpu_out_valid && !result_queue_full) begin
-          result_queue_d[result_queue_write_pnt_q].wdata = vfpu_processed_result;
-          result_queue_valid_d[result_queue_write_pnt_q] = 1'b1;
         end
       end
-      WAIT_STATE: begin
+      INTER_LANES_REDUCTION_RX: begin
         // If the workload is unbalanced and some lanes already have commit_cnt == '0,
         // delay the commit until we are over with the inter-lanes phase
         prevent_commit = 1'b1;
-        // Acknowledge the sliding unit even if it is not forwarding anything useful
-        sldu_mfpu_ready_d = sldu_mfpu_valid_q;
-        mfpu_red_valid_o  = red_hs_synch_q;
-        // If lane 0, wait for the inter-lane reduced operand, to perform a SIMD reduction
-        if (lane_id_i == '0) begin
-          if (sldu_mfpu_valid_q) begin
+        // This unit should either still participate to the reduction or
+        // just handshake the SLDU to sync with the still active lanes
+        if (sldu_mfpu_valid_q) begin
+          // If the lane is still active, issue the operands
+          if (reduction_rx_cnt_q != '0) begin
+            operand_a = sldu_operand_q;
+            operand_b = result_queue_q[result_queue_write_pnt_q].wdata;
+            operand_c = sldu_operand_q;
+            // Wait for operand_b to be valid
+            if (result_queue_valid_q[result_queue_write_pnt_q]) begin
+              // Issue the operation
+              vfpu_in_valid = 1'b1;
+              // Wait for the unit
+              if (vfpu_in_ready) begin
+                // Handshake the SLDU
+                sldu_mfpu_ready_d = 1'b1;
+                // Count the successful transaction with the SLDU
+                sldu_transactions_cnt_d = sldu_transactions_cnt_q - 1;
+                // Send the result to the SLDU during next cycle
+                reduction_rx_cnt_d = reduction_rx_cnt_q - 1;
+                // Disable the used operand
+                result_queue_valid_d[result_queue_write_pnt_q] = 1'b0;
+              end
+            end
+          // If the lane is not active anymore, just sync with the other lanes
+          end else begin
+            // Handshake the SLDU
+            sldu_mfpu_ready_d = 1'b1;
+            // Count the successful transaction with the SLDU
+            sldu_transactions_cnt_d = sldu_transactions_cnt_q - 1;
+            // Is this the last cycle for the INTER-LANES phase?
             if (sldu_transactions_cnt_q == 1) begin
-              result_queue_d[result_queue_write_pnt_q].wdata = sldu_operand_q;
-              result_queue_valid_d[result_queue_write_pnt_q] = 1'b1;
-              unique case (vinsn_issue_q.vtype.vsew)
-                  EW8 : simd_red_cnt_max_d = 2'd3;
-                  EW16: simd_red_cnt_max_d = 2'd2;
-                  EW32: simd_red_cnt_max_d = 2'd1;
-                  EW64: simd_red_cnt_max_d = 2'd0;
-              endcase
-              simd_red_cnt_d = '0;
-              mfpu_state_d = SIMD_REDUCTION;
+              // Lane 0 is receiving an already processed result
+              // and needs to SIMD-reduce the result
+              if (lane_id_i == '0) begin
+                result_queue_d[result_queue_write_pnt_q].wdata = sldu_operand_q;
+                result_queue_valid_d[result_queue_write_pnt_q] = 1'b1;
+                unique case (vinsn_commit.vtype.vsew)
+                    EW8 : simd_red_cnt_max_d = 2'd3;
+                    EW16: simd_red_cnt_max_d = 2'd2;
+                    EW32: simd_red_cnt_max_d = 2'd1;
+                    EW64: simd_red_cnt_max_d = 2'd0;
+                endcase
+                simd_red_cnt_d = '0;
+                mfpu_state_d = SIMD_REDUCTION;
+              // The other lanes can commit
+              end else begin
+                // From this lane's perspective, the reduction is over
+                mfpu_state_d = LN0_REDUCTION_COMMIT;
+              end
+            // This lane is inactive, it can go to the TX state immediately
+            end else begin
+              mfpu_state_d = INTER_LANES_REDUCTION_TX;
             end
           end
-        end else if (sldu_transactions_cnt_q == '0) begin
-          // If not lane 0, wait for the completion of the reduction
-          mfpu_state_d = MFPU_WAIT;
-
-          // Give the done to the main sequencer
-          commit_cnt_d = '0;
         end
-        if (sldu_mfpu_valid_q && sldu_mfpu_ready_d) sldu_transactions_cnt_d = sldu_transactions_cnt_q - 1;
-        if (mfpu_red_valid_o && mfpu_red_ready_i) red_hs_synch_d = 1'b0;
-        if (sldu_mfpu_valid_q && sldu_mfpu_ready_d && sldu_transactions_cnt_d != '0) red_hs_synch_d = 1'b1;
+        // If we have a valid result from the FPU,
+        // write it in the queue and send it to the SLDU
+        if (vfpu_out_valid && !result_queue_full) begin
+          result_queue_d[result_queue_write_pnt_q].wdata = vfpu_processed_result;
+          result_queue_valid_d[result_queue_write_pnt_q] = 1'b1;
+          mfpu_state_d = INTER_LANES_REDUCTION_TX;
+        end
+      end
+      LN0_REDUCTION_COMMIT: begin
+        // If the workload is unbalanced and some lanes already have commit_cnt == '0,
+        // delay the commit until we are over with the inter-lanes phase
+        prevent_commit = 1'b1;
+
+        // Wait for the completion of the reduction
+        mfpu_state_d = MFPU_WAIT;
+
+        // Give the done to the main sequencer
+        commit_cnt_d = '0;
       end
       SIMD_REDUCTION: begin // only lane 0 can enter this state
         unique case (simd_red_cnt_q)
@@ -1939,7 +2212,11 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
 
     // Send result information to the VRF
     // Use mfpu_result_gnt register instead of mfpu_state, because the state could be changed
+<<<<<<< HEAD
     if (mfpu_state_q inside {NO_REDUCTION, MFPU_WAIT, BC_MAC} || ((lane_id_i == '0) && commit_cnt_d == '0))
+=======
+    if (mfpu_state_q inside {NO_REDUCTION, MFPU_WAIT})
+>>>>>>> upstream/main
       mfpu_result_req_o = (result_queue_valid_q[result_queue_read_pnt_q] && !result_queue_q[result_queue_read_pnt_q].mask) ? 1'b1 : 1'b0;
     else
       mfpu_result_req_o = 1'b0;
