@@ -112,16 +112,18 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
 
   // Do we have a vector instruction ready to be issued?
   vfu_operation_t vinsn_issue_d, vinsn_issue_q;
-  logic           vinsn_issue_valid;
+  logic           vinsn_issue_d_valid, vinsn_issue_q_valid;
   assign vinsn_issue_d     = vinsn_queue_d.vinsn[vinsn_queue_d.issue_pnt];
-  assign vinsn_issue_valid = (vinsn_queue_q.issue_cnt != '0);
+  assign vinsn_issue_d_valid = (vinsn_queue_d.issue_cnt != '0);
+  assign vinsn_issue_q_valid = (vinsn_queue_q.issue_cnt != '0);
 
   // Do we have a vector instruction being processed?
   vfu_operation_t vinsn_processing_d, vinsn_processing_q;
-  logic           vinsn_processing_valid;
-  assign vinsn_processing_d     = vinsn_queue_d.vinsn[vinsn_queue_d.processing_pnt];
-  assign vinsn_processing_q     = vinsn_queue_q.vinsn[vinsn_queue_q.processing_pnt];
-  assign vinsn_processing_valid = (vinsn_queue_q.processing_cnt != '0);
+  logic           vinsn_processing_d_valid, vinsn_processing_q_valid;
+  assign vinsn_processing_d       = vinsn_queue_d.vinsn[vinsn_queue_d.processing_pnt];
+  assign vinsn_processing_q       = vinsn_queue_q.vinsn[vinsn_queue_q.processing_pnt];
+  assign vinsn_processing_d_valid = (vinsn_queue_d.processing_cnt != '0);
+  assign vinsn_processing_q_valid = (vinsn_queue_q.processing_cnt != '0);
 
   // Do we have a vector instruction with results being committed?
   vfu_operation_t vinsn_commit;
@@ -288,6 +290,18 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
   //  Multiplier  //
   //////////////////
 
+  // Clock-gate for the multipliers
+  logic clkgate_en_d, clkgate_en_q, clk_i_gated;
+
+  tc_clk_gating i_simd_mul_manual_clk_gate (
+    .clk_i     (clk_i       ),
+    .en_i      (clkgate_en_q),
+    .test_en_i (1'b0        ),
+    .clk_o     (clk_i_gated )
+  );
+
+  assign clkgate_en_d = vinsn_processing_d_valid & (vinsn_processing_d.op inside {[VMUL:VSMUL]});
+
   elen_t [3:0] vmul_simd_result;
   logic  [3:0] vmul_simd_in_valid;
   logic  [3:0] vmul_simd_in_ready;
@@ -324,17 +338,17 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
                       ~vmul_simd_in_valid[vinsn_issue_q.vtype.vsew];
 
   `FFLARNC(vmul_simd_op_a_q, vinsn_issue_q.use_scalar_op ? scalar_op : mfpu_operand_i[0],
-    gate_ff_en, gate_ff_clr, '0, clk_i, rst_ni);
+    gate_ff_en, gate_ff_clr, '0, clk_i_gated, rst_ni);
   `FFLARNC(vmul_simd_op_b_q, mfpu_operand_i[1],
-    gate_ff_en, gate_ff_clr, '0, clk_i, rst_ni);
+    gate_ff_en, gate_ff_clr, '0, clk_i_gated, rst_ni);
   `FFLARNC(vmul_simd_op_c_q, mfpu_operand_i[2],
-    gate_ff_en, gate_ff_clr, '0, clk_i, rst_ni);
+    gate_ff_en, gate_ff_clr, '0, clk_i_gated, rst_ni);
   `FFLARNC(vmul_simd_mask_q, mask_i,
-    gate_ff_en, gate_ff_clr, '0, clk_i, rst_ni);
+    gate_ff_en, gate_ff_clr, '0, clk_i_gated, rst_ni);
   `FFLARNC(vmul_simd_op_q, vinsn_issue_q.op,
-    gate_ff_en, gate_ff_clr, ara_op_e'('0), clk_i, rst_ni);
+    gate_ff_en, gate_ff_clr, ara_op_e'('0), clk_i_gated, rst_ni);
   `FFLARNC(vmul_simd_in_valid_q, vmul_simd_in_valid,
-    gate_ff_en, gate_ff_clr, '0, clk_i, rst_ni);
+    gate_ff_en, gate_ff_clr, '0, clk_i_gated, rst_ni);
 
   for (genvar i = 0; i < 4; i++) begin
 `ifdef GF22
@@ -404,7 +418,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
     .NumPipeRegs (LatMultiplierEW64),
     .ElementWidth(EW64             )
   ) i_simd_mul_ew64 (
-    .clk_i      (clk_i                         ),
+    .clk_i      (clk_i_gated                   ),
     .rst_ni     (rst_ni                        ),
     .operand_a_i(vmul_simd_op_a_q_gated[EW64]  ),
     .operand_b_i(vmul_simd_op_b_q_gated[EW64]  ),
@@ -426,7 +440,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
     .NumPipeRegs (LatMultiplierEW32),
     .ElementWidth(EW32             )
   ) i_simd_mul_ew32 (
-    .clk_i      (clk_i                         ),
+    .clk_i      (clk_i_gated                   ),
     .rst_ni     (rst_ni                        ),
     .operand_a_i(vmul_simd_op_a_q_gated[EW32]  ),
     .operand_b_i(vmul_simd_op_b_q_gated[EW32]  ),
@@ -448,7 +462,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
     .NumPipeRegs (LatMultiplierEW16),
     .ElementWidth(EW16             )
   ) i_simd_mul_ew16 (
-    .clk_i      (clk_i                         ),
+    .clk_i      (clk_i_gated                   ),
     .rst_ni     (rst_ni                        ),
     .operand_a_i(vmul_simd_op_a_q_gated[EW16]  ),
     .operand_b_i(vmul_simd_op_b_q_gated[EW16]  ),
@@ -470,7 +484,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
     .NumPipeRegs (LatMultiplierEW8),
     .ElementWidth(EW8             )
   ) i_simd_mul_ew8 (
-    .clk_i      (clk_i                         ),
+    .clk_i      (clk_i_gated                   ),
     .rst_ni     (rst_ni                        ),
     .operand_a_i(vmul_simd_op_a_q_gated[EW8]   ),
     .operand_b_i(vmul_simd_op_b_q_gated[EW8]   ),
@@ -499,7 +513,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
     // Only one SIMD Multiplier receives the request
     vmul_simd_in_valid                           = '0;
     vmul_simd_in_valid[vinsn_issue_q.vtype.vsew] = vmul_in_valid;
-    vmul_in_ready                                = vmul_simd_in_ready[vinsn_issue_q.vtype.vsew];
+    vmul_in_ready                                = clkgate_en_q & vmul_simd_in_ready[vinsn_issue_q.vtype.vsew];
 
     // Saturation flag
     mfpu_vxsat_d        = mfpu_vxsat[vinsn_processing_q.vtype.vsew];
@@ -1360,7 +1374,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
     // If we are about to issue an instruction while another one is processing,
     // issue only if the new instruction is slower than the previous one
     latency_problem_d = vinsn_issue_lat_d < vinsn_processing_lat_d;
-    latency_stall     = vinsn_issue_valid & vinsn_processing_valid & latency_problem_q;
+    latency_stall     = vinsn_issue_q_valid & vinsn_processing_q_valid & latency_problem_q;
 
     operand_a = (vinsn_issue_q.op == VFRDIV) ? scalar_op : mfpu_operand_i[1]; // vs2
     operand_b = (vinsn_issue_q.use_scalar_op && vinsn_issue_q.op != VFRDIV)
@@ -1452,7 +1466,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
         endcase
 
         // Is there a vector instruction ready to be issued and do we have all the operands necessary for this instruction?
-        if (operands_valid && vinsn_issue_valid && !is_reduction(vinsn_issue_q.op) && issue_cnt_q != '0 && !latency_stall) begin
+        if (operands_valid && vinsn_issue_q_valid && !is_reduction(vinsn_issue_q.op) && issue_cnt_q != '0 && !latency_stall) begin
           // Valiudate the inputs of the correct unit
           vmul_in_valid = vinsn_issue_mul;
           vdiv_in_valid = vinsn_issue_div;
@@ -1759,7 +1773,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
           // Issue the micro-operations
           // =======================================================
 
-          if (operands_valid && vinsn_issue_valid) begin
+          if (operands_valid && vinsn_issue_q_valid) begin
             // Validate the inputs of FPU
             vfpu_in_valid = 1'b1;
 
@@ -1967,7 +1981,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
         mfpu_red_valid_o = red_hs_synch_q;
 
         // Issue the uOp
-        if (operands_valid && vinsn_issue_valid && issue_cnt_q != '0) begin
+        if (operands_valid && vinsn_issue_q_valid && issue_cnt_q != '0) begin
           vfpu_in_valid = 1'b1;
           if (vfpu_in_ready) begin
             // The number of elements to be issued in one 64-bit data
@@ -2277,7 +2291,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
       if (mfpu_state_q inside {NO_REDUCTION, BC_MAC}) begin
         // Initialize counters and vmfpu state if needed by the next instruction
         // After a reduction, the next instructions starts after the reduction commits
-        if (is_reduction(vinsn_queue_q.vinsn[vinsn_queue_d.commit_pnt].op) && (vinsn_queue_d.issue_cnt != '0)) begin
+        if (is_reduction(vinsn_queue_q.vinsn[vinsn_queue_d.commit_pnt].op) && (vinsn_issue_d_valid)) begin
           // The next will be the first operation of this instruction
           // This information is useful for reduction operation
           first_op_d         = 1'b1;
@@ -2399,6 +2413,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
       intra_op_rx_cnt_q       <= '0;
       osum_issue_cnt_q        <= '0;
       mfpu_vxsat_q            <= '0;
+      clkgate_en_q            <= 1'b0;
     end else begin
       issue_cnt_q             <= issue_cnt_d;
       to_process_cnt_q        <= to_process_cnt_d;
@@ -2422,6 +2437,7 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
       intra_op_rx_cnt_q       <= intra_op_rx_cnt_d;
       osum_issue_cnt_q        <= osum_issue_cnt_d;
       mfpu_vxsat_q            <= mfpu_vxsat_d;
+      clkgate_en_q            <= clkgate_en_d;
     end
   end
 
